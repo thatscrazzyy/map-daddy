@@ -11,7 +11,8 @@ DEFAULT_CONFIG = {
     "height": 1080,
     "fullscreen": True,
     "auto_connect": False,
-    "show_status_overlay": True
+    "show_status_overlay": True,
+    "media_cache_dir": "~/.mapdaddy/cache"
 }
 
 def load_config():
@@ -29,7 +30,7 @@ def load_config():
                     cfg[k] = v
             return cfg
     except Exception as e:
-        print(f"[Map Daddy] Error loading config: {e}")
+        print(f"[Map Daddy Receiver] Error loading config: {e}")
         return DEFAULT_CONFIG.copy()
 
 def save_config(config):
@@ -39,4 +40,4 @@ def save_config(config):
         with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=2)
     except Exception as e:
-        print(f"[Map Daddy] Error saving config: {e}")
+        print(f"[Map Daddy Receiver] Error saving config: {e}")

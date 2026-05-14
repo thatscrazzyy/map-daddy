@@ -1,66 +1,72 @@
 # Map Daddy Receiver
 
-The native Raspberry Pi projection application for Map Daddy. 
+The Raspberry Pi projection receiver for Map Daddy. It connects to the relay with a pairing code or polls a local backend, downloads public media URLs into a local cache, and renders mapped scenes fullscreen with Pygame and OpenCV.
 
-## Features
-- Hardware-accelerated perspective warping using OpenCV + Pygame.
-- Internet-mode via WebSocket Relay using Pairing Codes.
-- Native UI for easy configuration without a terminal.
-- Fallback local polling mode.
+## Install
 
-## Installation
-
-### Dependencies
-Ensure you have the required system libraries installed on your Pi:
 ```bash
 sudo apt update
-sudo apt install -y python3-venv libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
+sudo apt install -y python3-venv python3-pip libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libgl1 libglib2.0-0
+make install
 ```
 
-### Python Setup
+## Run
+
 ```bash
-cd renderer-pi
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+make run
+make run-windowed
+make run-relay RELAY=wss://your-relay.example.com CODE=MD-123456
+make run-local SERVER=http://192.168.1.25:8000
 ```
 
-## Running
-Start the graphical setup UI:
+Equivalent direct commands:
+
 ```bash
 python3 mapdaddy_receiver.py
-```
-
-Connect directly to relay:
-```bash
-python3 mapdaddy_receiver.py --relay wss://your-relay.com --code MD-123456
-```
-
-Test mode (Windowed):
-```bash
-python3 mapdaddy_receiver.py --windowed
-```
-
-Old local polling mode:
-```bash
+python3 mapdaddy_receiver.py --relay wss://relay-url.com --code MD-123456
 python3 mapdaddy_receiver.py --server http://192.168.1.25:8000
+python3 mapdaddy_receiver.py --windowed --width 1280 --height 720
 ```
 
 ## Keyboard Shortcuts
-- **ENTER**: Connect/Submit
-- **S**: Open Settings (from Pairing screen)
-- **C**: Disconnect and return to Pairing screen
-- **ESC**: Go back / Quit
-- **F**: Toggle Fullscreen
-- **H**: Show/Hide status overlay
-- **R**: Clear media cache
 
-## Auto-start on boot
-To make the receiver launch automatically when the Pi boots:
+- `ESC`: quit
+- `F`: toggle fullscreen
+- `H`: show/hide status overlay
+- `S`: settings screen
+- `C`: connection screen
+- `R`: clear media cache
+- `ENTER`: connect from pairing screen
+
+## Config
+
+Config is stored at `~/.mapdaddy/config.json`.
+
+```json
+{
+  "relay_url": "wss://your-relay-server.com",
+  "last_pairing_code": "MD-123456",
+  "width": 1920,
+  "height": 1080,
+  "fullscreen": true,
+  "auto_connect": false,
+  "show_status_overlay": true,
+  "media_cache_dir": "~/.mapdaddy/cache"
+}
+```
+
+## Autostart
+
+Install the systemd service with the actual project path:
+
 ```bash
-# Edit mapdaddy-receiver.service if your username is not "pi" or folder is different
-sudo cp mapdaddy-receiver.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable mapdaddy-receiver.service
-sudo systemctl start mapdaddy-receiver.service
+make autostart-install PROJECT_DIR=/home/pi/map-daddy
+make autostart-enable
+make logs
+```
+
+Disable it:
+
+```bash
+make autostart-disable
 ```

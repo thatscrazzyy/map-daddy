@@ -1,0 +1,58 @@
+{
+  "version": "0.2.0",
+  "project_name": "Demo Mapping",
+  "output": {
+    "width": 1920,
+    "height": 1080,
+    "background": "#000000"
+  },
+  "sources": [
+    {
+      "id": "source_1",
+      "name": "Main Video",
+      "type": "video",
+      "url": "https://example.com/media/demo.mp4",
+      "width": 1920,
+      "height": 1080,
+      "loop": true,
+      "muted": true
+    },
+    {
+      "id": "source_2",
+      "name": "Logo",
+      "type": "image",
+      "url": "https://example.com/media/logo.png",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "surface_1",
+      "name": "Main Wall",
+      "type": "quad",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0,
+      "blend_mode": "normal",
+      "source_id": "source_1",
+      "source_points": [
+        [0, 0],
+        [1920, 0],
+        [1920, 1080],
+        [0, 1080]
+      ],
+      "destination_points": [
+        [300, 200],
+        [1400, 180],
+        [1450, 850],
+        [250, 900]
+      ]
+    }
+  ],
+  "metadata": {
+    "created_by": "Map Daddy",
+    "created_at": "",
+    "updated_at": ""
+  }
+}

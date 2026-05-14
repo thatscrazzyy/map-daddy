@@ -10,14 +10,82 @@ function generatePairingCode() {
 }
 
 function normalizeSceneMediaUrls(scene, publicBackendUrl) {
-  if (!scene || !scene.surfaces) return scene;
+  if (!scene) return scene;
   const normalized = JSON.parse(JSON.stringify(scene)); // deep copy
-  normalized.surfaces.forEach(s => {
-    if (s.media && s.media.startsWith('/media/')) {
-      s.media = publicBackendUrl.replace(/\/$/, '') + s.media;
+  normalized.sources = normalized.sources || [];
+  normalized.sources.forEach(source => {
+    if (source.url && source.url.startsWith('/media/')) {
+      source.url = publicBackendUrl.replace(/\/$/, '') + source.url;
     }
   });
   return normalized;
+}
+
+function guessSourceType(url, fileType = '') {
+  if (fileType.startsWith('video/')) return 'video';
+  const lower = (url || '').split('?')[0].toLowerCase();
+  return lower.match(/\.(mp4|mov|mkv|avi|webm)$/) ? 'video' : 'image';
+}
+
+function migrateScene(scene) {
+  const migrated = JSON.parse(JSON.stringify(scene || {}));
+  const canvas = migrated.canvas || {};
+  const output = migrated.output || {};
+  migrated.version = migrated.version || '0.2.0';
+  migrated.project_name = migrated.project_name || 'Map Daddy Project';
+  migrated.output = {
+    width: Number(output.width || canvas.width || 1920),
+    height: Number(output.height || canvas.height || 1080),
+    background: output.background || '#000000'
+  };
+  delete migrated.canvas;
+
+  migrated.sources = migrated.sources || [];
+  const byUrl = new Map(migrated.sources.filter(s => s.url).map(s => [s.url, s]));
+  migrated.surfaces = (migrated.surfaces || []).map((surface, index) => {
+    const next = {
+      type: 'quad',
+      visible: true,
+      locked: false,
+      opacity: 1.0,
+      blend_mode: 'normal',
+      ...surface
+    };
+    if (next.media && !next.source_id) {
+      let source = byUrl.get(next.media);
+      if (!source) {
+        source = {
+          id: `source_${index + 1}`,
+          name: `${next.name || 'Surface'} Media`,
+          type: guessSourceType(next.media),
+          url: next.media,
+          width: migrated.output.width,
+          height: migrated.output.height,
+          loop: true,
+          muted: true
+        };
+        migrated.sources.push(source);
+        byUrl.set(next.media, source);
+      }
+      next.source_id = source.id;
+    }
+    delete next.media;
+    return next;
+  });
+  migrated.metadata = migrated.metadata || {
+    created_by: 'Map Daddy',
+    created_at: '',
+    updated_at: ''
+  };
+  return migrated;
+}
+
+function getSceneWidth(scene) {
+  return scene?.output?.width || 1920;
+}
+
+function getSceneHeight(scene) {
+  return scene?.output?.height || 1080;
 }
 
 function App() {
@@ -43,7 +111,7 @@ function App() {
       const res = await fetch(`${LOCAL_BACKEND_URL}/api/current-scene`);
       const data = await res.json();
       if (data && data.surfaces) {
-        setScene(data);
+        setScene(migrateScene(data));
       }
     } catch (e) {
       console.error("Failed to fetch scene locally", e);
@@ -51,7 +119,7 @@ function App() {
   };
 
   const saveSceneLocally = async (newScene) => {
-    const sceneToSave = newScene || scene;
+    const sceneToSave = migrateScene(newScene || scene);
     try {
       await fetch(`${LOCAL_BACKEND_URL}/api/current-scene`, {
         method: 'POST',
@@ -113,7 +181,7 @@ function App() {
 
   const sendSceneUpdate = (currentScene, ws = wsRef.current, code = pairingCode) => {
     if (ws && ws.readyState === WebSocket.OPEN && code) {
-      const publicScene = normalizeSceneMediaUrls(currentScene, PUBLIC_BACKEND_URL);
+    const publicScene = normalizeSceneMediaUrls(migrateScene(currentScene), PUBLIC_BACKEND_URL);
       ws.send(JSON.stringify({
         type: 'scene:update',
         code: code,
@@ -123,11 +191,12 @@ function App() {
   };
 
   const handleSceneChange = (newScene) => {
-    setScene(newScene);
+    const migratedScene = migrateScene(newScene);
+    setScene(migratedScene);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      saveSceneLocally(newScene);
-      sendSceneUpdate(newScene);
+      saveSceneLocally(migratedScene);
+      sendSceneUpdate(migratedScene);
     }, 100);
   };
 
@@ -146,10 +215,22 @@ function App() {
       const data = await res.json();
       
       if (selectedSurfaceId && scene) {
-        const newScene = { ...scene };
+        const newScene = migrateScene(scene);
+        newScene.sources = [...(newScene.sources || [])];
         const surface = newScene.surfaces.find(s => s.id === selectedSurfaceId);
         if (surface) {
-          surface.media = data.url;
+          const sourceId = `source_${Date.now()}`;
+          newScene.sources.push({
+            id: sourceId,
+            name: file.name,
+            type: guessSourceType(data.url, file.type),
+            url: data.url,
+            width: getSceneWidth(newScene),
+            height: getSceneHeight(newScene),
+            loop: true,
+            muted: true
+          });
+          surface.source_id = sourceId;
           handleSceneChange(newScene);
         }
       } else {
@@ -161,17 +242,26 @@ function App() {
   };
 
   const addSurface = () => {
-    const newScene = { ...scene };
+    const newScene = migrateScene(scene);
     const newId = `surface_${Date.now()}`;
+    const width = getSceneWidth(newScene);
+    const height = getSceneHeight(newScene);
     newScene.surfaces.push({
       id: newId,
       name: `New Surface ${newScene.surfaces.length + 1}`,
       type: "quad",
-      media: "",
-      source_points: [[0, 0], [1920, 0], [1920, 1080], [0, 1080]],
-      destination_points: [[400, 300], [1520, 300], [1520, 780], [400, 780]],
+      source_id: "",
+      source_points: [[0, 0], [width, 0], [width, height], [0, height]],
+      destination_points: [
+        [Math.round(width * 0.2), Math.round(height * 0.25)],
+        [Math.round(width * 0.8), Math.round(height * 0.25)],
+        [Math.round(width * 0.8), Math.round(height * 0.75)],
+        [Math.round(width * 0.2), Math.round(height * 0.75)]
+      ],
       opacity: 1.0,
-      visible: true
+      visible: true,
+      locked: false,
+      blend_mode: "normal"
     });
     setSelectedSurfaceId(newId);
     handleSceneChange(newScene);
@@ -190,15 +280,15 @@ function App() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    const newScene = { ...scene };
+    const newScene = migrateScene(scene);
     const surface = newScene.surfaces.find(s => s.id === draggingPoint.surfaceId);
     if (surface) {
-      const scaleX = scene.canvas.width / rect.width;
-      const scaleY = scene.canvas.height / rect.height;
+      const scaleX = getSceneWidth(scene) / rect.width;
+      const scaleY = getSceneHeight(scene) / rect.height;
       
       surface.destination_points[draggingPoint.pointIndex] = [
-        Math.max(0, Math.min(scene.canvas.width, Math.round(x * scaleX))),
-        Math.max(0, Math.min(scene.canvas.height, Math.round(y * scaleY)))
+        Math.max(0, Math.min(getSceneWidth(scene), Math.round(x * scaleX))),
+        Math.max(0, Math.min(getSceneHeight(scene), Math.round(y * scaleY)))
       ];
       handleSceneChange(newScene);
     }
@@ -300,7 +390,7 @@ function App() {
             
             <svg 
               ref={svgRef}
-              viewBox={`0 0 ${scene.canvas.width} ${scene.canvas.height}`} 
+              viewBox={`0 0 ${getSceneWidth(scene)} ${getSceneHeight(scene)}`} 
               className="absolute inset-0 w-full h-full touch-none"
             >
               {scene.surfaces.map((surface) => {
@@ -342,6 +432,7 @@ function App() {
         <div className="w-80 border-l border-gray-800 bg-gray-900/30 p-4 flex flex-col gap-6 overflow-y-auto">
           {selectedSurfaceId ? (() => {
             const surface = scene.surfaces.find(s => s.id === selectedSurfaceId);
+            const source = (scene.sources || []).find(src => src.id === surface.source_id);
             return (
               <>
                 <div>
@@ -352,7 +443,7 @@ function App() {
                       type="text" 
                       value={surface.name} 
                       onChange={(e) => {
-                        const newScene = {...scene};
+                        const newScene = migrateScene(scene);
                         newScene.surfaces.find(s => s.id === selectedSurfaceId).name = e.target.value;
                         handleSceneChange(newScene);
                       }}
@@ -364,9 +455,10 @@ function App() {
                 <div>
                   <h2 className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-3">Media</h2>
                   <div className="bg-gray-800/50 p-4 rounded-md border border-gray-700/50 flex flex-col gap-3 text-center">
-                    {surface.media ? (
+                    {source?.url ? (
                       <div className="text-xs text-gray-300 break-all bg-gray-900 p-2 rounded border border-gray-700 max-h-24 overflow-y-auto">
-                        {surface.media}
+                        <div className="font-semibold text-emerald-400 mb-1">{source.name}</div>
+                        {source.url}
                       </div>
                     ) : (
                       <div className="text-sm text-gray-500 mb-2">No media assigned</div>

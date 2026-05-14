@@ -1,16 +1,32 @@
 # Map Daddy Relay Server
 
-A lightweight WebSocket relay server to connect Map Daddy web controllers to Raspberry Pi renderers over the internet using pairing codes.
+A lightweight WebSocket relay that connects hosted Map Daddy controllers to Raspberry Pi renderers with pairing codes.
+
+The relay passes JSON only. It does not store, upload, or proxy media files.
 
 ## Setup
+
 ```bash
-npm install
-npm start
+make install
+make dev
+```
+
+## Production
+
+```bash
+PORT=8080 make start
 ```
 
 ## Environment Variables
-- `PORT`: Port to run the server on (default: 8080)
+
+- `PORT`: HTTP/WebSocket port, default `8080`.
 
 ## Deployment
-You can deploy this folder to Render, Railway, Fly.io, or Heroku. It only requires a standard Node.js environment.
-No database is required; state is held in-memory.
+
+Deploy this folder to Render, Railway, Fly.io, Heroku, or a VPS with Node.js. No database is required; room state is held in memory and inactive rooms are cleaned up.
+
+## Health
+
+```bash
+curl http://localhost:8080/health
+```

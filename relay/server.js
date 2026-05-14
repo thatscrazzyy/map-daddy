@@ -15,6 +15,21 @@ function log(msg) {
   console.log(`[Map Daddy Relay] ${msg}`);
 }
 
+function safeSend(ws, payload) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  }
+}
+
+function roomStatus(code, room) {
+  return {
+    type: 'room:status',
+    code,
+    controllerConnected: !!room.controller && room.controller.readyState === WebSocket.OPEN,
+    rendererConnected: !!room.renderer && room.renderer.readyState === WebSocket.OPEN
+  };
+}
+
 // Clean up stale rooms every 5 minutes
 setInterval(() => {
   const now = Date.now();
@@ -35,7 +50,7 @@ wss.on('connection', (ws) => {
       const data = JSON.parse(message);
       
       if (!data.code || typeof data.code !== 'string') {
-        ws.send(JSON.stringify({ type: 'error', message: 'Missing or invalid code' }));
+        safeSend(ws, { type: 'error', message: 'Missing or invalid code' });
         return;
       }
 
@@ -55,7 +70,7 @@ wss.on('connection', (ws) => {
 
       if (data.type === 'join') {
         if (data.role !== 'controller' && data.role !== 'renderer') {
-          ws.send(JSON.stringify({ type: 'error', message: 'Invalid role' }));
+          safeSend(ws, { type: 'error', message: 'Invalid role' });
           return;
         }
 
@@ -63,50 +78,46 @@ wss.on('connection', (ws) => {
         currentRole = data.role;
         room[currentRole] = ws;
 
-        ws.send(JSON.stringify({ type: 'joined', role: currentRole, code }));
+        safeSend(ws, { type: 'joined', role: currentRole, code });
         log(`${currentRole} joined room ${code}`);
 
-        // Broadcast room status
-        const statusMsg = JSON.stringify({
-          type: 'room:status',
-          code,
-          controllerConnected: !!room.controller && room.controller.readyState === WebSocket.OPEN,
-          rendererConnected: !!room.renderer && room.renderer.readyState === WebSocket.OPEN
-        });
-
-        if (room.controller) room.controller.send(statusMsg);
-        if (room.renderer) room.renderer.send(statusMsg);
+        const statusMsg = roomStatus(code, room);
+        safeSend(room.controller, statusMsg);
+        safeSend(room.renderer, statusMsg);
 
         // If renderer joins and we have a latest scene, send it
         if (currentRole === 'renderer' && room.latestScene) {
-          ws.send(JSON.stringify({
+          safeSend(ws, {
             type: 'scene:update',
             code,
             scene: room.latestScene
-          }));
+          });
         }
       } else if (data.type === 'scene:update') {
         if (currentRole !== 'controller') {
-          ws.send(JSON.stringify({ type: 'error', message: 'Only controller can send scene:update' }));
+          safeSend(ws, { type: 'error', message: 'Only controller can send scene:update' });
+          return;
+        }
+        if (!data.scene || typeof data.scene !== 'object') {
+          safeSend(ws, { type: 'error', message: 'scene:update requires a scene object' });
           return;
         }
         room.latestScene = data.scene;
-        if (room.renderer && room.renderer.readyState === WebSocket.OPEN) {
-          room.renderer.send(JSON.stringify(data));
-        }
+        safeSend(room.renderer, { type: 'scene:update', code, scene: data.scene });
       } else if (data.type === 'renderer:status' || data.type === 'renderer:error') {
         if (currentRole !== 'renderer') {
-          ws.send(JSON.stringify({ type: 'error', message: `Only renderer can send ${data.type}` }));
+          safeSend(ws, { type: 'error', message: `Only renderer can send ${data.type}` });
           return;
         }
-        if (room.controller && room.controller.readyState === WebSocket.OPEN) {
-          room.controller.send(JSON.stringify(data));
-        }
+        safeSend(room.controller, data);
       } else if (data.type === 'ping') {
-          ws.send(JSON.stringify({ type: 'pong' }));
+          safeSend(ws, { type: 'pong' });
+      } else {
+        safeSend(ws, { type: 'error', message: `Unsupported message type: ${data.type}` });
       }
     } catch (e) {
-      console.error('[Map Daddy Relay] Error processing message:', e);
+      safeSend(ws, { type: 'error', message: 'Malformed JSON message' });
+      console.error('[Map Daddy Relay] Error processing message:', e.message);
     }
   });
 
@@ -117,19 +128,9 @@ wss.on('connection', (ws) => {
         room[currentRole] = null;
         log(`${currentRole} disconnected from room ${currentRoom}`);
         
-        const statusMsg = JSON.stringify({
-          type: 'room:status',
-          code: currentRoom,
-          controllerConnected: !!room.controller && room.controller.readyState === WebSocket.OPEN,
-          rendererConnected: !!room.renderer && room.renderer.readyState === WebSocket.OPEN
-        });
-
-        if (room.controller && room.controller.readyState === WebSocket.OPEN) {
-          room.controller.send(statusMsg);
-        }
-        if (room.renderer && room.renderer.readyState === WebSocket.OPEN) {
-          room.renderer.send(statusMsg);
-        }
+        const statusMsg = roomStatus(currentRoom, room);
+        safeSend(room.controller, statusMsg);
+        safeSend(room.renderer, statusMsg);
       }
     }
   });

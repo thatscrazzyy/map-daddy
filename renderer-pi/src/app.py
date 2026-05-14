@@ -18,6 +18,10 @@ class MapDaddyReceiver:
             self.config['relay_url'] = cli_args.relay
         if cli_args.code:
             self.config['last_pairing_code'] = cli_args.code
+        if cli_args.width:
+            self.config['width'] = cli_args.width
+        if cli_args.height:
+            self.config['height'] = cli_args.height
             
         self.windowed = cli_args.windowed
         self.server_url = cli_args.server # Local polling mode fallback
@@ -25,11 +29,11 @@ class MapDaddyReceiver:
         self.setup_display()
         
         self.ui = UI(self.w, self.h)
-        self.media_cache = MediaCache()
+        self.media_cache = MediaCache(self.config.get('media_cache_dir'), base_url=self.server_url)
         self.renderer = ProjectionRenderer(self.media_cache, self.w, self.h)
         self.relay = None
         
-        self.state = "PAIRING"
+        self.state = "STARTUP"
         self.scene = None
         self.status_msg = "Ready"
         self.active_setting = 0
@@ -38,18 +42,25 @@ class MapDaddyReceiver:
         self.running = True
 
         if self.server_url:
-            self.state = "POLLING"
+            self.state = "WAITING_FOR_SCENE"
         elif cli_args.code or self.config['auto_connect']:
             if self.config['last_pairing_code']:
                 self.connect_relay()
+            else:
+                self.state = "PAIRING"
+        else:
+            self.state = "PAIRING"
 
     def setup_display(self):
         info = pygame.display.Info()
-        self.w = info.current_w if not self.windowed else self.config['width']
-        self.h = info.current_h if not self.windowed else self.config['height']
-        flags = pygame.RESIZABLE if self.windowed else pygame.FULLSCREEN
+        fullscreen = (not self.windowed) and self.config.get('fullscreen', True)
+        self.w = info.current_w if fullscreen else self.config['width']
+        self.h = info.current_h if fullscreen else self.config['height']
+        flags = pygame.FULLSCREEN if fullscreen else pygame.RESIZABLE
         self.screen = pygame.display.set_mode((self.w, self.h), flags)
         pygame.display.set_caption("Map Daddy Receiver")
+        if hasattr(self, "renderer"):
+            self.renderer.resize(self.w, self.h)
 
     def connect_relay(self):
         if not self.config['last_pairing_code']:
@@ -68,6 +79,10 @@ class MapDaddyReceiver:
             
         def on_status(msg):
             self.status_msg = msg
+            if msg == "waiting_for_scene" and not self.scene:
+                self.state = "WAITING_FOR_SCENE"
+            elif msg.startswith("Disconnected") and not self.scene:
+                self.state = "DISCONNECTED"
             
         self.relay = RelayClient(
             url=self.config['relay_url'],
@@ -86,16 +101,27 @@ class MapDaddyReceiver:
             
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    if self.state in ["SETTINGS", "RENDERING", "WAITING_FOR_SCENE", "POLLING"]:
-                        self.state = "PAIRING"
-                    else:
-                        self.running = False
+                    self.running = False
+                elif event.key == pygame.K_f:
+                    self.windowed = not self.windowed
+                    self.config['fullscreen'] = not self.windowed
+                    save_config(self.config)
+                    self.setup_display()
+                elif event.key == pygame.K_h:
+                    self.config['show_status_overlay'] = not self.config['show_status_overlay']
+                    save_config(self.config)
+                elif event.key == pygame.K_s:
+                    self.state = "SETTINGS"
+                elif event.key == pygame.K_c:
+                    if self.relay:
+                        self.relay.stop()
+                    self.state = "PAIRING"
+                elif event.key == pygame.K_r:
+                    self.media_cache.clear()
                 
                 elif self.state == "PAIRING":
                     if event.key == pygame.K_RETURN:
                         self.connect_relay()
-                    elif event.key == pygame.K_s:
-                        self.state = "SETTINGS"
                     elif event.key == pygame.K_BACKSPACE:
                         self.config['last_pairing_code'] = self.config['last_pairing_code'][:-1]
                     else:
@@ -114,18 +140,6 @@ class MapDaddyReceiver:
                             self.config['show_status_overlay'] = not self.config['show_status_overlay']
                         save_config(self.config)
                         
-                elif self.state in ["RENDERING", "WAITING_FOR_SCENE", "POLLING"]:
-                    if event.key == pygame.K_r:
-                        self.media_cache.clear()
-                    elif event.key == pygame.K_c:
-                        if self.relay: self.relay.stop()
-                        self.state = "PAIRING"
-                    elif event.key == pygame.K_h:
-                        self.config['show_status_overlay'] = not self.config['show_status_overlay']
-                        save_config(self.config)
-                    elif event.key == pygame.K_f:
-                        self.windowed = not self.windowed
-                        self.setup_display()
 
     def run(self):
         last_poll = 0
@@ -141,8 +155,8 @@ class MapDaddyReceiver:
             elif self.state == "CONNECTING":
                 self.ui.draw_pairing_screen(self.screen, self.config['last_pairing_code'], self.config['relay_url'], self.status_msg)
                 
-            elif self.state in ["RENDERING", "WAITING_FOR_SCENE", "POLLING"]:
-                if self.state == "POLLING":
+            elif self.state in ["RENDERING", "WAITING_FOR_SCENE", "DISCONNECTED", "ERROR"]:
+                if self.server_url:
                     now = time.time()
                     if now - last_poll > 2.0:
                         last_poll = now
@@ -151,6 +165,7 @@ class MapDaddyReceiver:
                             if r.status_code == 200:
                                 self.scene = r.json()
                                 self.status_msg = "Polling successful"
+                                self.state = "RENDERING"
                         except:
                             self.status_msg = "Polling failed"
 

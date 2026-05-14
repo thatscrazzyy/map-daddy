@@ -48,20 +48,20 @@ class RelayClient:
                     elif data.get("type") == "room:status":
                         pass
                 except Exception as e:
-                    print(f"[Map Daddy] WS Parse Error: {e}")
+                    print(f"[Map Daddy Receiver] WS Parse Error: {e}")
 
             def on_error(ws, error):
-                print(f"[Map Daddy] WS Error: {error}")
+                print(f"[Map Daddy Receiver] WS Error: {error}")
                 if 'on_error' in self.callbacks:
                     self.callbacks['on_error'](str(error))
 
             def on_close(ws, close_status_code, close_msg):
-                print("[Map Daddy] WS Closed")
+                print("[Map Daddy Receiver] WS Closed")
                 if self.running:
                     self.callbacks.get('on_status', lambda s: None)("Disconnected. Reconnecting...")
             
             def on_open(ws):
-                print("[Map Daddy] WS Connected")
+                print("[Map Daddy Receiver] WS Connected")
                 self.callbacks.get('on_status', lambda s: None)("Connected. Joining room...")
                 ws.send(json.dumps({
                     "type": "join",
@@ -69,6 +69,7 @@ class RelayClient:
                     "code": self.code
                 }))
                 self.send_status("waiting_for_scene")
+                self.callbacks.get('on_status', lambda s: None)("waiting_for_scene")
 
             self.ws = websocket.WebSocketApp(
                 self.url,

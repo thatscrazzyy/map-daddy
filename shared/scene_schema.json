@@ -1,97 +1,87 @@
 {
-  "project_name": "Demo Mapping",
-  "canvas": {
-    "width": 1920,
-    "height": 1080
-  },
-  "surfaces": [
-    {
-      "id": "surface_1",
-      "name": "Main Wall",
-      "type": "quad",
-      "media": "/media/436eizqdutv91.jpg",
-      "source_points": [
-        [
-          0,
-          0
-        ],
-        [
-          1920,
-          0
-        ],
-        [
-          1920,
-          1080
-        ],
-        [
-          0,
-          1080
-        ]
-      ],
-      "destination_points": [
-        [
-          88,
-          83
-        ],
-        [
-          523,
-          107
-        ],
-        [
-          517,
-          505
-        ],
-        [
-          146,
-          531
-        ]
-      ],
-      "opacity": 1,
-      "visible": true
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mapdaddy.local/scene_schema.json",
+  "title": "Map Daddy Scene",
+  "type": "object",
+  "required": ["version", "project_name", "output", "sources", "surfaces", "metadata"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "0.2.0"
     },
-    {
-      "id": "surface_1778397597314",
-      "name": "New Surface 2",
-      "type": "quad",
-      "media": "/media/26.png",
-      "source_points": [
-        [
-          0,
-          0
-        ],
-        [
-          1920,
-          0
-        ],
-        [
-          1920,
-          1080
-        ],
-        [
-          0,
-          1080
-        ]
-      ],
-      "destination_points": [
-        [
-          954,
-          23
-        ],
-        [
-          1381,
-          11
-        ],
-        [
-          1387,
-          286
-        ],
-        [
-          1014,
-          338
-        ]
-      ],
-      "opacity": 1,
-      "visible": true
+    "project_name": {
+      "type": "string"
+    },
+    "output": {
+      "type": "object",
+      "required": ["width", "height", "background"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "background": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "enum": ["image", "video", "generated"] },
+          "url": { "type": "string" },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 },
+          "loop": { "type": "boolean" },
+          "muted": { "type": "boolean" }
+        }
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "type", "source_points", "destination_points"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "enum": ["quad", "polygon"] },
+          "visible": { "type": "boolean" },
+          "locked": { "type": "boolean" },
+          "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+          "blend_mode": { "enum": ["normal"] },
+          "source_id": { "type": "string" },
+          "source_points": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": { "$ref": "#/$defs/point" }
+          },
+          "destination_points": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": { "$ref": "#/$defs/point" }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "created_by": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      }
     }
-  ]
+  },
+  "$defs": {
+    "point": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "number" }
+    }
+  }
 }

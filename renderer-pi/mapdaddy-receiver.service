@@ -5,10 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
 Environment="DISPLAY=:0"
-WorkingDirectory=/home/pi/pimapper/renderer-pi
-ExecStart=/home/pi/pimapper/renderer-pi/venv/bin/python mapdaddy_receiver.py
+WorkingDirectory=@PROJECT_DIR@/renderer-pi
+ExecStart=@PROJECT_DIR@/renderer-pi/venv/bin/python mapdaddy_receiver.py
 Restart=always
 RestartSec=5
 
