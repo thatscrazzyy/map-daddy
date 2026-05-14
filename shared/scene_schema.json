@@ -1,0 +1,97 @@
+{
+  "project_name": "Demo Mapping",
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "surfaces": [
+    {
+      "id": "surface_1",
+      "name": "Main Wall",
+      "type": "quad",
+      "media": "/media/436eizqdutv91.jpg",
+      "source_points": [
+        [
+          0,
+          0
+        ],
+        [
+          1920,
+          0
+        ],
+        [
+          1920,
+          1080
+        ],
+        [
+          0,
+          1080
+        ]
+      ],
+      "destination_points": [
+        [
+          88,
+          83
+        ],
+        [
+          523,
+          107
+        ],
+        [
+          517,
+          505
+        ],
+        [
+          146,
+          531
+        ]
+      ],
+      "opacity": 1,
+      "visible": true
+    },
+    {
+      "id": "surface_1778397597314",
+      "name": "New Surface 2",
+      "type": "quad",
+      "media": "/media/26.png",
+      "source_points": [
+        [
+          0,
+          0
+        ],
+        [
+          1920,
+          0
+        ],
+        [
+          1920,
+          1080
+        ],
+        [
+          0,
+          1080
+        ]
+      ],
+      "destination_points": [
+        [
+          954,
+          23
+        ],
+        [
+          1381,
+          11
+        ],
+        [
+          1387,
+          286
+        ],
+        [
+          1014,
+          338
+        ]
+      ],
+      "opacity": 1,
+      "visible": true
+    }
+  ]
+}

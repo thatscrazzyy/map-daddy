@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+*/node_modules/
+venv/
+*/venv/
+.venv/
+*/.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node/Vite builds
+dist/
+*/dist/
+build/
+*/build/
+.vite/
+*/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Runtime data and uploaded media
+backend/media/
+backend/projects/
+
+# Logs and local tunnel artifacts
+*.log
+tunnel_*.log
+cloudflared.exe
+config.yml
+
+# Archives and packaged outputs
+*.zip
+*.tar
+*.tar.gz
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo

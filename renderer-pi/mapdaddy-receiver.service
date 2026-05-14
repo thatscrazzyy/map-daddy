@@ -1,0 +1,16 @@
+[Unit]
+Description=Map Daddy Receiver
+After=graphical.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Environment="DISPLAY=:0"
+WorkingDirectory=/home/pi/pimapper/renderer-pi
+ExecStart=/home/pi/pimapper/renderer-pi/venv/bin/python mapdaddy_receiver.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target
