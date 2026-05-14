@@ -3,7 +3,7 @@
 import os
 from PyInstaller.utils.hooks import collect_submodules
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(SPECPATH), ".."))
+ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 
 block_cipher = None
 
