@@ -1,7 +1,9 @@
 import os
 import json
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import shutil
@@ -28,6 +30,17 @@ os.makedirs(PROJECTS_DIR, exist_ok=True)
 
 # Mount media folder so renderer/frontend can access files
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
+def _relay_session_url():
+    configured = os.getenv("MAP_DADDY_RELAY_SESSION_URL")
+    if configured:
+        return configured
+    relay_url = os.getenv("PUBLIC_RELAY_URL") or os.getenv("VITE_MAP_DADDY_RELAY_URL") or "ws://localhost:8080"
+    if relay_url.startswith("wss://"):
+        relay_url = "https://" + relay_url[len("wss://"):]
+    elif relay_url.startswith("ws://"):
+        relay_url = "http://" + relay_url[len("ws://"):]
+    return relay_url.rstrip("/") + "/sessions"
 
 def _guess_source_type(url):
     lowered = (url or "").split("?")[0].lower()
@@ -104,6 +117,22 @@ async def upload_media(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     return {"url": f"/media/{file.filename}", "filename": file.filename}
+
+@app.post("/api/sessions/create")
+def create_projection_session():
+    request = urllib.request.Request(
+        _relay_session_url(),
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise HTTPException(status_code=e.code, detail="Relay refused session creation")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not create relay session: {e}")
 
 # Mount frontend
 FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "../frontend/dist"))

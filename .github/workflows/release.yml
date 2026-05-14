@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  checks:
+    name: Frontend, backend, and relay checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            relay/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+      - name: Install relay dependencies
+        run: npm ci
+        working-directory: relay
+      - name: Check relay syntax
+        run: node --check server.js
+        working-directory: relay
+      - name: Compile Python
+        run: python -m compileall backend/main.py renderer-pi/mapdaddy_receiver.py renderer-pi/src
+
+  receiver-windows:
+    name: Receiver Windows x64
+    runs-on: windows-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+          cache: pip
+      - name: Build Windows executable
+        run: .\scripts\build_windows.ps1
+        working-directory: renderer-pi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MapDaddy-Receiver-Windows-x64
+          path: renderer-pi/dist/release/MapDaddy-Receiver-Windows-x64.exe
+          if-no-files-found: error
+
+  receiver-linux:
+    name: Receiver Linux x64
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install runtime build libraries
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+      - name: Build Linux executable
+        run: bash scripts/build_linux.sh
+        working-directory: renderer-pi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MapDaddy-Receiver-Linux-x64
+          path: renderer-pi/dist/release/MapDaddy-Receiver-Linux-x64
+          if-no-files-found: error
+
+  receiver-pi-arm64:
+    name: Receiver Raspberry Pi ARM64
+    if: ${{ vars.BUILD_PI_ARM64 == 'true' }}
+    runs-on: [self-hosted, linux, ARM64]
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Raspberry Pi ARM64 executable
+        run: bash scripts/build_pi.sh MapDaddy-Receiver-RaspberryPi-arm64
+        working-directory: renderer-pi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MapDaddy-Receiver-RaspberryPi-arm64
+          path: renderer-pi/dist/release/MapDaddy-Receiver-RaspberryPi-arm64
+          if-no-files-found: error
+
+  github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [receiver-windows, receiver-linux, receiver-pi-arm64]
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/') && needs.receiver-windows.result == 'success' && needs.receiver-linux.result == 'success' && (needs.receiver-pi-arm64.result == 'success' || needs.receiver-pi-arm64.result == 'skipped') }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

@@ -1,7 +1,7 @@
 PYTHON ?= python3
 NPM ?= npm
 
-.PHONY: install install-pi dev backend frontend relay receiver receiver-windowed test clean
+.PHONY: install install-pi dev backend frontend relay receiver receiver-windowed build-receiver package release-check test clean
 
 install:
 	$(MAKE) -C backend install
@@ -28,6 +28,19 @@ receiver:
 
 receiver-windowed:
 	$(MAKE) -C renderer-pi run-windowed
+
+build-receiver:
+	$(MAKE) -C renderer-pi build
+
+package: build-receiver
+	$(NPM) --prefix frontend run build
+
+release-check:
+	$(PYTHON) -m compileall backend/main.py renderer-pi/mapdaddy_receiver.py renderer-pi/src
+	$(NPM) --prefix relay install
+	$(NPM) --prefix frontend install
+	$(NPM) --prefix frontend run build
+	$(MAKE) -C renderer-pi build
 
 test:
 	$(PYTHON) -m compileall backend/main.py renderer-pi/mapdaddy_receiver.py renderer-pi/src

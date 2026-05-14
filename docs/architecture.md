@@ -6,7 +6,19 @@ Map Daddy is split into controller, relay, backend, and receiver pieces.
 Hosted Web Controller -> Map Daddy Relay -> Raspberry Pi Receiver -> HDMI/Projector
 ```
 
-The web controller edits scenes and sends JSON updates over WebSocket. The relay groups controller and renderer clients by pairing code and forwards JSON messages. The Raspberry Pi receiver renders the last valid scene fullscreen with Pygame and OpenCV.
+The web controller edits scenes and sends JSON updates over WebSocket. The relay creates short-lived sessions with a human pairing code plus a session secret, then forwards JSON between one controller and one renderer. The Raspberry Pi receiver renders the last valid scene fullscreen with Pygame and OpenCV.
+
+## Session Model
+
+The hosted controller calls `POST /api/sessions/create` on the backend or `POST /sessions` on the relay. The response contains `relay_url`, `pairing_code`, `session_secret`, and `expires_at`.
+
+Both clients join with:
+
+```json
+{ "type": "join", "role": "controller", "code": "MD-123456", "sessionSecret": "generated-secret" }
+```
+
+The relay rejects missing code, missing secret, wrong secret, expired sessions, and invalid roles. Secrets are not logged.
 
 ## Media Handling
 

@@ -3,3 +3,4 @@ opencv-python==4.8.1.78
 numpy==1.26.2
 requests==2.31.0
 websocket-client==1.7.0
+pyinstaller==6.6.0
