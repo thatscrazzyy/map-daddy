@@ -28,6 +28,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# PyInstaller build recipe is source, not generated output
+!renderer-pi/build/
+!renderer-pi/build/mapdaddy_receiver.spec
+
 # Local environment and secrets
 .env
 .env.*
