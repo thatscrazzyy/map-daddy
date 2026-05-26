@@ -2,25 +2,32 @@ import os
 import json
 import urllib.error
 import urllib.request
+from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import shutil
+import re
 
 app = FastAPI(title="Map Daddy API")
 
-# Allow CORS for frontend dev
+def _cors_origins():
+    configured = os.getenv("CORS_ORIGINS", "*")
+    if configured == "*":
+        return ["*"]
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MEDIA_DIR = os.path.join(BASE_DIR, "media")
-PROJECTS_DIR = os.path.join(BASE_DIR, "projects")
+MEDIA_DIR = os.path.abspath(os.getenv("MAP_DADDY_MEDIA_DIR", os.path.join(BASE_DIR, "media")))
+PROJECTS_DIR = os.path.abspath(os.getenv("MAP_DADDY_PROJECTS_DIR", os.path.join(BASE_DIR, "projects")))
 SHARED_DIR = os.path.abspath(os.path.join(BASE_DIR, "../shared"))
 SCENE_FILE = os.path.join(PROJECTS_DIR, "current_scene.json")
 EXAMPLE_SCENE_FILE = os.path.join(SHARED_DIR, "example_scene.json")
@@ -47,6 +54,15 @@ def _guess_source_type(url):
     if lowered.endswith((".mp4", ".mov", ".mkv", ".avi", ".webm")):
         return "video"
     return "image"
+
+def _safe_upload_name(filename: str):
+    name = Path(filename or "upload.bin").name
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")
+    if not name:
+        name = "upload.bin"
+    stem = Path(name).stem[:80] or "upload"
+    suffix = Path(name).suffix[:16]
+    return f"{int(datetime.now(timezone.utc).timestamp())}_{stem}{suffix}"
 
 SCENE_VERSION = "0.3.0"
 
@@ -184,10 +200,11 @@ def save_current_scene(scene: dict):
 
 @app.post("/api/media/upload")
 async def upload_media(file: UploadFile = File(...)):
-    file_path = os.path.join(MEDIA_DIR, file.filename)
+    safe_name = _safe_upload_name(file.filename)
+    file_path = os.path.join(MEDIA_DIR, safe_name)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    return {"url": f"/media/{file.filename}", "filename": file.filename}
+    return {"url": f"/media/{safe_name}", "filename": safe_name}
 
 @app.post("/api/sessions/create")
 def create_projection_session():

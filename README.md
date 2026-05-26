@@ -96,6 +96,25 @@ NEXT_PUBLIC_MAP_DADDY_PUBLIC_BACKEND_URL=https://your-public-backend.example.com
 
 If no backend is reachable, the hosted controller still opens with a demo scene. Media upload and saving need the backend.
 
+## Online Deployment
+
+Recommended low-setup public deployment:
+
+- Frontend: GitHub Pages.
+- Backend/media API: Cloudflare Worker + R2 + KV.
+- Relay: Cloudflare Worker + Durable Object WebSockets.
+
+Deployment files are included:
+
+- `cloudflare/worker/`
+- `.github/workflows/deploy-frontend-pages.yml`
+- `frontend/vercel.json`
+- `backend/Dockerfile`
+- `relay/Dockerfile`
+- `render.yaml`
+
+See [docs/deployment-guide.md](docs/deployment-guide.md).
+
 ## Relay Setup
 
 ```bash
@@ -180,4 +199,4 @@ Without that runner, tagged releases will wait for the Pi job and will not publi
 - `make test`: compile Python and build/check available JS projects.
 - `make clean`: clear receiver media cache.
 
-See [docs/public-demo-release.md](docs/public-demo-release.md), [docs/relay-setup.md](docs/relay-setup.md), [docs/pi-setup.md](docs/pi-setup.md), and [docs/release-guide.md](docs/release-guide.md).
+See [docs/public-demo-release.md](docs/public-demo-release.md), [docs/relay-setup.md](docs/relay-setup.md), [docs/pi-setup.md](docs/pi-setup.md), [docs/release-guide.md](docs/release-guide.md), and [docs/deployment-guide.md](docs/deployment-guide.md).

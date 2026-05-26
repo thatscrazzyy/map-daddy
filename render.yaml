@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: mapdaddy-relay
+    env: docker
+    plan: starter
+    dockerfilePath: ./relay/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: PUBLIC_RELAY_URL
+        value: wss://mapdaddy-relay.onrender.com
+      - key: SESSION_TTL_MS
+        value: "7200000"
+
+  - type: web
+    name: mapdaddy-backend
+    env: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/current-scene
+    disk:
+      name: mapdaddy-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: CORS_ORIGINS
+        value: https://your-mapdaddy-frontend.vercel.app
+      - key: PUBLIC_RELAY_URL
+        value: wss://mapdaddy-relay.onrender.com
+      - key: MAP_DADDY_RELAY_SESSION_URL
+        value: https://mapdaddy-relay.onrender.com/sessions
+      - key: MAP_DADDY_MEDIA_DIR
+        value: /data/media
+      - key: MAP_DADDY_PROJECTS_DIR
+        value: /data/projects

@@ -37,6 +37,15 @@ pnpm-debug.log*
 .env.*
 !.env.example
 !.env.*.example
+.dev.vars
+*/.dev.vars
+*.pem
+*.key
+*.crt
+
+# Cloudflare/Wrangler local state
+.wrangler/
+*/.wrangler/
 
 # Runtime data and uploaded media
 backend/media/

@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import websocket
 
 
@@ -35,6 +36,13 @@ class RelayClient:
                 }))
             except Exception:
                 pass
+
+    def _connection_url(self):
+        parsed = urlparse(self.url)
+        query = parse_qs(parsed.query)
+        if self.code and "code" not in query:
+            query["code"] = [self.code]
+        return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
 
     def _run(self):
         while self.running:
@@ -83,7 +91,7 @@ class RelayClient:
                 }))
 
             self.ws = websocket.WebSocketApp(
-                self.url,
+                self._connection_url(),
                 on_open=on_open,
                 on_message=on_message,
                 on_error=on_error,
