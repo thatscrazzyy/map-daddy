@@ -1,0 +1,22 @@
+name = "map-daddy"
+main = "src/index.js"
+compatibility_date = "2026-05-01"
+
+[vars]
+CORS_ORIGINS = "*"
+
+[[kv_namespaces]]
+binding = "SCENES"
+id = "04c4ce4f1f2a4fa0ba54d78268a16b4f"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "map-daddy-media"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "ProjectionRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ProjectionRoom"]
