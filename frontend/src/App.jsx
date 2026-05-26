@@ -756,8 +756,8 @@ function App() {
   const [relayStatus, setRelayStatus] = useState('idle');
   const [rendererConnected, setRendererConnected] = useState(false);
   const [rendererStatus, setRendererStatus] = useState('');
+  const [sessionPassword, setSessionPassword] = useState(import.meta.env.VITE_MAP_DADDY_SESSION_SECRET || '');
   const [sessionError, setSessionError] = useState('');
-  const [sessionPassword, setSessionPassword] = useState('');
   const [saveStatus, setSaveStatus] = useState('');
   
   const [toast, setToast] = useState(null);

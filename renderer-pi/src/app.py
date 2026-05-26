@@ -2,6 +2,7 @@ import pygame
 import sys
 import requests
 import time
+import logging
 from .config import load_config, save_runtime_config
 from .media_cache import MediaCache
 from .relay_client import RelayClient
@@ -27,6 +28,8 @@ class MapDaddyReceiver:
             
         self.windowed = cli_args.windowed
         self.server_url = cli_args.server # Local polling mode fallback
+        self.debug_ws = getattr(cli_args, "debug_ws", False)
+
         
         self.setup_display()
         
@@ -94,14 +97,21 @@ class MapDaddyReceiver:
             elif msg.startswith("Disconnected") and not self.scene:
                 self.state = "DISCONNECTED"
             
+        def on_fatal_error(msg):
+            self.state = "PAIRING"
+            self.status_msg = f"Fatal Error: {msg}"
+            self.scene = None
+
         self.relay = RelayClient(
             url=self.config['relay_url'],
             code=self.config['last_pairing_code'],
             session_secret=self.config.get('last_session_secret', ''),
             callbacks={
                 'on_scene': on_scene,
-                'on_status': on_status
-            }
+                'on_status': on_status,
+                'on_fatal_error': on_fatal_error
+            },
+            debug=self.debug_ws
         )
         self.relay.start()
 
@@ -253,6 +263,7 @@ class MapDaddyReceiver:
 
 if __name__ == "__main__":
     import argparse
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     parser = argparse.ArgumentParser(description="Map Daddy Receiver")
     parser.add_argument("--relay", type=str, help="Relay server URL (e.g. wss://relay.com)")
     parser.add_argument("--code", type=str, help="Pairing code")
@@ -261,6 +272,7 @@ if __name__ == "__main__":
     parser.add_argument("--windowed", action="store_true", help="Run in a window instead of fullscreen")
     parser.add_argument("--width", type=int, help="Output/window width")
     parser.add_argument("--height", type=int, help="Output/window height")
+    parser.add_argument("--debug-ws", action="store_true", help="Enable verbose websocket tracing")
     
     args = parser.parse_args()
     app = MapDaddyReceiver(args)
