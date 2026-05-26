@@ -34,10 +34,14 @@ make run-local SERVER=http://192.168.1.25:8000
 Equivalent direct commands:
 
 ```bash
+# Running directly as a package module (recommended):
+python3 -m src.app
+python3 -m src.app --relay wss://relay-url.com --code MD-123456 --session-secret generated-secret
+python3 -m src.app --server http://192.168.1.25:8000
+python3 -m src.app --windowed --width 1280 --height 720
+
+# Running via the root entrypoint launcher:
 python3 mapdaddy_receiver.py
-python3 mapdaddy_receiver.py --relay wss://relay-url.com --code MD-123456 --session-secret generated-secret
-python3 mapdaddy_receiver.py --server http://192.168.1.25:8000
-python3 mapdaddy_receiver.py --windowed --width 1280 --height 720
 ```
 
 ## Build Executables
