@@ -2,7 +2,7 @@ import numpy as np
 
 from .scene import Scene
 from .source import Source
-from .transforms import alpha_blend, warp_quad
+from .transforms import alpha_blend, warp_quad, warp_triangle
 
 
 def parse_hex_color(value):
@@ -28,47 +28,78 @@ class Mapper:
             data["id"]: Source.from_dict(data, self.media_cache)
             for data in self.scene.sources
         }
-        self.surfaces = self.scene.surfaces
+        self.manager = self.scene.manager
+        self.unsupported_warnings = set()
 
     def release(self):
         for source in self.sources.values():
             source.release()
 
-    def _source_points_for_frame(self, source, surface, frame):
+    def _source_points_for_frame(self, source, input_shape, frame):
         actual_h, actual_w = frame.shape[:2]
         declared_w = float(source.declared_width or actual_w)
         declared_h = float(source.declared_height or actual_h)
         if declared_w <= 0 or declared_h <= 0:
-            return surface.source_points
+            return input_shape.vertices
         scale_x = actual_w / declared_w
         scale_y = actual_h / declared_h
-        return [[x * scale_x, y * scale_y] for x, y in surface.source_points]
+        return [[x * scale_x, y * scale_y] for x, y in input_shape.vertices]
+
+    def _warn_once(self, key, message):
+        if key not in self.unsupported_warnings:
+            self.unsupported_warnings.add(key)
+            print(message)
 
     def render_frame(self):
         width, height = self.output_size
         frame = np.zeros((height, width, 3), dtype=np.uint8)
         frame[:, :] = self.background
 
-        for surface in self.surfaces:
-            if not surface.visible:
+        for mapping in self.manager.visible_mappings():
+            if not mapping.source_id:
                 continue
-            if not surface.source_id:
-                continue
-            source = self.sources.get(surface.source_id)
+            source = self.sources.get(mapping.source_id)
             if not source:
-                print(f"[Map Daddy Receiver] Missing source for surface {surface.id}: {surface.source_id}")
+                print(f"[Map Daddy Receiver] Missing source for mapping {mapping.id}: {mapping.source_id}")
+                continue
+            input_shape = self.manager.resolve_input_shape(mapping)
+            output_shape = self.manager.resolve_output_shape(mapping)
+            if not input_shape or not output_shape:
+                print(f"[Map Daddy Receiver] Mapping {mapping.id} has missing shape references")
                 continue
             try:
+                if input_shape.type != output_shape.type:
+                    self._warn_once(
+                        f"{mapping.id}:type-mismatch",
+                        f"[Map Daddy Receiver] Mapping {mapping.id} skipped: input/output shape types differ",
+                    )
+                    continue
+                if output_shape.type in ("mesh", "ellipse", "polygon"):
+                    self._warn_once(
+                        f"{mapping.id}:{output_shape.type}",
+                        f"[Map Daddy Receiver] Mapping {mapping.id} uses {output_shape.type}, which is reserved for a future renderer",
+                    )
+                    continue
+
                 source_frame = source.get_frame()
-                source_points = self._source_points_for_frame(source, surface, source_frame)
-                warped, mask = warp_quad(
-                    source_frame,
-                    source_points,
-                    surface.destination_points,
-                    self.output_size,
-                )
-                frame = alpha_blend(frame, warped, mask, surface.opacity)
+                source_points = self._source_points_for_frame(source, input_shape, source_frame)
+                if output_shape.type == "triangle":
+                    warped, mask = warp_triangle(
+                        source_frame,
+                        source_points,
+                        output_shape.vertices,
+                        self.output_size,
+                    )
+                else:
+                    warped, mask = warp_quad(
+                        source_frame,
+                        source_points,
+                        output_shape.vertices,
+                        self.output_size,
+                    )
+                source_opacity = float(getattr(source, "opacity", 1.0))
+                frame = alpha_blend(frame, warped, mask, mapping.opacity * source_opacity)
             except Exception as exc:
-                print(f"[Map Daddy Receiver] Render failed for {surface.id}: {exc}")
+                print(f"[Map Daddy Receiver] Render failed for {mapping.id}: {exc}")
 
         return frame

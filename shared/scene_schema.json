@@ -3,11 +3,11 @@
   "$id": "https://mapdaddy.local/scene_schema.json",
   "title": "Map Daddy Scene",
   "type": "object",
-  "required": ["version", "project_name", "output", "sources", "surfaces", "metadata"],
+  "required": ["version", "project_name", "output", "sources", "shapes", "mappings", "metadata"],
   "properties": {
     "version": {
       "type": "string",
-      "const": "0.2.0"
+      "const": "0.3.0"
     },
     "project_name": {
       "type": "string"
@@ -29,43 +29,70 @@
         "properties": {
           "id": { "type": "string" },
           "name": { "type": "string" },
-          "type": { "enum": ["image", "video", "generated"] },
+          "type": { "enum": ["image", "video", "color", "generated"] },
           "url": { "type": "string" },
           "width": { "type": "integer", "minimum": 1 },
           "height": { "type": "integer", "minimum": 1 },
           "loop": { "type": "boolean" },
-          "muted": { "type": "boolean" }
+          "muted": { "type": "boolean" },
+          "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+          "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+        }
+      }
+    },
+    "shapes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "type", "vertices"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "enum": ["quad", "triangle", "mesh", "ellipse", "polygon"] },
+          "vertices": {
+            "type": "array",
+            "minItems": 3,
+            "items": { "$ref": "#/$defs/point" }
+          },
+          "locked": { "type": "boolean" },
+          "transform": { "type": "object" },
+          "mesh": { "type": "object" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "quad" } } },
+            "then": { "properties": { "vertices": { "minItems": 4, "maxItems": 4 } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "triangle" } } },
+            "then": { "properties": { "vertices": { "minItems": 3, "maxItems": 3 } } }
+          }
+        ]
+      }
+    },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "source_id", "input_shape_id", "output_shape_id"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "source_id": { "type": "string" },
+          "input_shape_id": { "type": "string" },
+          "output_shape_id": { "type": "string" },
+          "visible": { "type": "boolean" },
+          "locked": { "type": "boolean" },
+          "solo": { "type": "boolean" },
+          "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+          "blend_mode": { "enum": ["normal"] },
+          "depth": { "type": "integer" }
         }
       }
     },
     "surfaces": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["id", "name", "type", "source_points", "destination_points"],
-        "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "type": { "enum": ["quad", "polygon"] },
-          "visible": { "type": "boolean" },
-          "locked": { "type": "boolean" },
-          "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
-          "blend_mode": { "enum": ["normal"] },
-          "source_id": { "type": "string" },
-          "source_points": {
-            "type": "array",
-            "minItems": 4,
-            "maxItems": 4,
-            "items": { "$ref": "#/$defs/point" }
-          },
-          "destination_points": {
-            "type": "array",
-            "minItems": 4,
-            "maxItems": 4,
-            "items": { "$ref": "#/$defs/point" }
-          }
-        }
-      }
+      "description": "Legacy 0.2.0 compatibility input only. New saves should use mappings and shapes.",
+      "type": "array"
     },
     "metadata": {
       "type": "object",

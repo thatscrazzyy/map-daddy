@@ -48,11 +48,68 @@ def _guess_source_type(url):
         return "video"
     return "image"
 
+SCENE_VERSION = "0.3.0"
+
+def _default_vertices(shape_type, width, height, inset=0.2):
+    if shape_type == "triangle":
+        return [
+            [round(width * 0.5), round(height * 0.18)],
+            [round(width * 0.82), round(height * 0.78)],
+            [round(width * 0.18), round(height * 0.78)],
+        ]
+    return [
+        [round(width * inset), round(height * inset)],
+        [round(width * (1 - inset)), round(height * inset)],
+        [round(width * (1 - inset)), round(height * (1 - inset))],
+        [round(width * inset), round(height * (1 - inset))],
+    ]
+
+def _ensure_shape(scene, shape):
+    if any(existing.get("id") == shape["id"] for existing in scene["shapes"]):
+        return
+    scene["shapes"].append(shape)
+
+def _migrate_surface(scene, surface, index):
+    width = scene["output"]["width"]
+    height = scene["output"]["height"]
+    shape_type = "triangle" if surface.get("type") == "triangle" else "quad"
+    surface_id = surface.get("id") or f"surface_{index + 1}"
+    input_shape_id = surface.get("input_shape_id") or f"{surface_id}_input"
+    output_shape_id = surface.get("output_shape_id") or f"{surface_id}_output"
+
+    _ensure_shape(scene, {
+        "id": input_shape_id,
+        "name": f"{surface.get('name') or f'Surface {index + 1}'} Crop",
+        "type": shape_type,
+        "vertices": surface.get("source_points") or _default_vertices(shape_type, width, height, 0),
+        "locked": False,
+    })
+    _ensure_shape(scene, {
+        "id": output_shape_id,
+        "name": f"{surface.get('name') or f'Surface {index + 1}'} Output",
+        "type": shape_type,
+        "vertices": surface.get("destination_points") or _default_vertices(shape_type, width, height),
+        "locked": bool(surface.get("locked", False)),
+    })
+    scene["mappings"].append({
+        "id": surface_id,
+        "name": surface.get("name") or f"Mapping {index + 1}",
+        "source_id": surface.get("source_id") or "",
+        "input_shape_id": input_shape_id,
+        "output_shape_id": output_shape_id,
+        "visible": surface.get("visible", True),
+        "locked": surface.get("locked", False),
+        "solo": surface.get("solo", False),
+        "opacity": float(surface.get("opacity", 1.0)),
+        "blend_mode": surface.get("blend_mode", "normal"),
+        "depth": int(surface.get("depth", index)),
+    })
+
 def migrate_scene(scene: dict):
     scene = json.loads(json.dumps(scene or {}))
     canvas = scene.pop("canvas", {}) or {}
     output = scene.get("output") or {}
-    scene["version"] = scene.get("version") or "0.2.0"
+    scene["version"] = SCENE_VERSION
     scene["project_name"] = scene.get("project_name") or "Map Daddy Project"
     scene["output"] = {
         "width": int(output.get("width") or canvas.get("width") or 1920),
@@ -87,7 +144,21 @@ def migrate_scene(scene: dict):
             surface["source_id"] = source["id"]
 
     scene["sources"] = sources
-    scene.setdefault("surfaces", [])
+    scene["shapes"] = list(scene.get("shapes") or [])
+    scene["mappings"] = list(scene.get("mappings") or [])
+    for index, surface in enumerate(scene.get("surfaces") or []):
+        _migrate_surface(scene, surface, index)
+    scene.pop("surfaces", None)
+
+    for index, mapping in enumerate(scene["mappings"]):
+        mapping.setdefault("visible", True)
+        mapping.setdefault("locked", False)
+        mapping.setdefault("solo", False)
+        mapping.setdefault("opacity", 1.0)
+        mapping.setdefault("blend_mode", "normal")
+        mapping.setdefault("depth", index)
+        mapping.setdefault("source_id", "")
+
     metadata = scene.setdefault("metadata", {})
     metadata.setdefault("created_by", "Map Daddy")
     metadata.setdefault("created_at", "")
@@ -101,7 +172,7 @@ def get_current_scene():
             return migrate_scene(json.load(f))
     if os.path.exists(EXAMPLE_SCENE_FILE):
         with open(EXAMPLE_SCENE_FILE, "r") as f:
-            return json.load(f)
+            return migrate_scene(json.load(f))
     return {}
 
 @app.post("/api/current-scene")

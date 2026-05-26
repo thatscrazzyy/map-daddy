@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "project_name": "Demo Mapping",
   "output": {
     "width": 1920,
@@ -26,28 +26,35 @@
       "height": 1024
     }
   ],
-  "surfaces": [
+  "shapes": [
     {
-      "id": "surface_1",
-      "name": "Main Wall",
+      "id": "input_shape_1",
+      "name": "Video Crop",
       "type": "quad",
+      "vertices": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]],
+      "locked": false
+    },
+    {
+      "id": "output_shape_1",
+      "name": "Wall Shape",
+      "type": "quad",
+      "vertices": [[300, 200], [1400, 180], [1450, 850], [250, 900]],
+      "locked": false
+    }
+  ],
+  "mappings": [
+    {
+      "id": "mapping_1",
+      "name": "Main Wall",
+      "source_id": "source_1",
+      "input_shape_id": "input_shape_1",
+      "output_shape_id": "output_shape_1",
       "visible": true,
       "locked": false,
+      "solo": false,
       "opacity": 1.0,
       "blend_mode": "normal",
-      "source_id": "source_1",
-      "source_points": [
-        [0, 0],
-        [1920, 0],
-        [1920, 1080],
-        [0, 1080]
-      ],
-      "destination_points": [
-        [300, 200],
-        [1400, 180],
-        [1450, 850],
-        [250, 900]
-      ]
+      "depth": 0
     }
   ],
   "metadata": {

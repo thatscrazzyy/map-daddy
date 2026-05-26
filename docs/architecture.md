@@ -28,7 +28,15 @@ For the MVP, media can come from the FastAPI backend served through a public URL
 
 ## Scene Model
 
-The current scene format is `0.2.0`. Surfaces reference media through `source_id`; the media definition lives in `sources[]`. This keeps geometry, media, and rendering responsibilities separate.
+The current scene format is `0.3.0`. It uses a MapMap-inspired split:
+
+```text
+Source/Paint -> Mapping/Layer -> Input Shape + Output Shape
+```
+
+Map Daddy is different from MapMap because editing is browser-hosted and rendering happens on a paired receiver through the relay. The controller sends scene JSON only. Media stays as URLs that the receiver downloads and caches locally.
+
+Legacy `0.2.0` surface scenes are migrated on load. Existing `source_points` become input-shape vertices and `destination_points` become output-shape vertices.
 
 ## Local Mode
 

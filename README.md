@@ -1,6 +1,6 @@
 # Map Daddy
 
-Map Daddy is a projection mapping demo product with a hosted web controller and a downloadable receiver app for PCs and Raspberry Pi.
+Map Daddy is a projection mapping demo product with a hosted web controller and a downloadable receiver app for PCs and Raspberry Pi. Its editor model borrows mature projection-mapping concepts from MapMap, but keeps Map Daddy's web/relay/receiver architecture.
 
 Public website placeholder:
 
@@ -28,6 +28,16 @@ The relay never sends media files over WebSocket. Media URLs are public backend/
 - `shared/`: Scene schema and example scene.
 - `docs/`: Architecture, setup, hosting, and release notes.
 
+## Mapping Model
+
+Scene version `0.3.0` separates:
+
+```text
+Source/Paint -> Mapping/Layer -> Input Shape + Output Shape
+```
+
+Old `0.2.0` surface scenes are migrated automatically. See [docs/mapping-model.md](docs/mapping-model.md) and [docs/editor-guide.md](docs/editor-guide.md).
+
 ## Public Demo Flow
 
 1. Download a receiver from GitHub Releases.
@@ -42,7 +52,8 @@ Release artifacts are built with PyInstaller:
 
 - `MapDaddy-Receiver-Windows-x64.exe`
 - `MapDaddy-Receiver-Linux-x64`
-- `MapDaddy-Receiver-RaspberryPi-arm64` when an ARM64/self-hosted runner is enabled
+- `MapDaddy-Receiver-Linux-arm64`
+- `MapDaddy-Receiver-RaspberryPi-arm64`
 
 Run from source for development:
 
@@ -145,9 +156,18 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`.github/workflows/release.yml` builds the frontend, checks backend/relay code, builds Windows and Linux receiver artifacts, and uploads them to a GitHub Release.
+`.github/workflows/release.yml` builds the frontend, checks backend/relay code, builds Windows, Linux x64, native Linux ARM64, and Raspberry Pi ARM64 receiver artifacts, and uploads them to a GitHub Release.
 
-Raspberry Pi ARM64 builds are native builds. Add a self-hosted Linux ARM64 runner with the `self-hosted`, `linux`, and `ARM64` labels, then set repository variable `BUILD_PI_ARM64=true`. Without that runner, the Pi job is skipped and no Pi artifact is published.
+Linux ARM64 uses GitHub's hosted `ubuntu-24.04-arm` runner. Raspberry Pi ARM64 is a required Pi-specific build and must run on Raspberry Pi hardware through a self-hosted runner. Register the Pi runner with these labels:
+
+```text
+self-hosted
+linux
+ARM64
+raspberry-pi
+```
+
+Without that runner, tagged releases will wait for the Pi job and will not publish. This is intentional so the `RaspberryPi` artifact is not a generic ARM build mislabeled as Pi-specific.
 
 ## Make Commands
 
@@ -160,4 +180,4 @@ Raspberry Pi ARM64 builds are native builds. Add a self-hosted Linux ARM64 runne
 - `make test`: compile Python and build/check available JS projects.
 - `make clean`: clear receiver media cache.
 
-See [docs/public-demo-release.md](docs/public-demo-release.md), [docs/relay-setup.md](docs/relay-setup.md), and [docs/pi-setup.md](docs/pi-setup.md).
+See [docs/public-demo-release.md](docs/public-demo-release.md), [docs/relay-setup.md](docs/relay-setup.md), [docs/pi-setup.md](docs/pi-setup.md), and [docs/release-guide.md](docs/release-guide.md).

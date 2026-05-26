@@ -2,6 +2,8 @@
 
 The projection receiver for Map Daddy. It connects to a relay session with a pairing code and password, downloads public media URLs into a local cache, and renders mapped scenes fullscreen with Pygame and OpenCV.
 
+The receiver accepts scene model `0.3.0` and migrates legacy `0.2.0` surface scenes. Quads use perspective transforms, triangles use affine transforms, and mesh/ellipse/polygon mappings are reserved placeholders that are skipped with a clear warning.
+
 ## Download
 
 Download one of these from GitHub Releases:
@@ -58,7 +60,7 @@ Raspberry Pi:
 bash scripts/build_pi.sh
 ```
 
-Raspberry Pi builds should run on Raspberry Pi OS or a Linux ARM64 runner. PyInstaller does not reliably cross-compile this app from x64 GitHub-hosted runners.
+Raspberry Pi builds should run on Raspberry Pi hardware with Raspberry Pi OS. The Pi build script refuses generic ARM Linux by default so the `RaspberryPi` release artifact is not mislabeled. PyInstaller does not reliably cross-compile this app from x64 GitHub-hosted runners.
 
 ## Pairing UI
 

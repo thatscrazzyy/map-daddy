@@ -23,6 +23,15 @@ def placeholder_frame(width, height, message="Media unavailable"):
     return frame
 
 
+def parse_hex_color(value):
+    if not isinstance(value, str) or not value.startswith("#") or len(value) != 7:
+        return (32, 32, 38)
+    try:
+        return tuple(int(value[i : i + 2], 16) for i in (1, 3, 5))
+    except ValueError:
+        return (32, 32, 38)
+
+
 class Source:
     def __init__(self, data, media_cache):
         self.id = data.get("id")
@@ -35,6 +44,8 @@ class Source:
         self.height = self.declared_height
         self.loop = bool(data.get("loop", True))
         self.muted = bool(data.get("muted", True))
+        self.opacity = float(data.get("opacity", 1.0))
+        self.color = data.get("color", "#202026")
         self.media_cache = media_cache
         self.loaded = False
         self.error = None
@@ -58,7 +69,17 @@ class Source:
             return VideoSource(data, media_cache)
         if source_type == "image":
             return ImageSource(data, media_cache)
+        if source_type in ("color", "generated"):
+            return GeneratedSource(data, media_cache)
         return Source(data, media_cache)
+
+
+class GeneratedSource(Source):
+    def get_frame(self):
+        color = parse_hex_color(self.color)
+        frame = np.zeros((int(self.height), int(self.width), 3), dtype=np.uint8)
+        frame[:, :] = color
+        return frame
 
 
 class ImageSource(Source):

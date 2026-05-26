@@ -1,43 +1,57 @@
 # Mapping Model
 
-Map Daddy's mapping model is inspired by ofxPiMapper's separation between sources, surfaces, managers, and project persistence.
+Map Daddy `0.3.0` uses a MapMap-inspired model while keeping Map Daddy's hosted controller, relay, backend, and receiver architecture.
+
+```text
+Source/Paint -> Mapping/Layer -> Shape
+```
 
 ## Source
 
-A source is loadable content:
+A source is loadable or generated content in `sources[]`.
 
-- `image`: PNG, JPG, JPEG, or WebP when OpenCV supports it.
-- `video`: downloaded file opened with OpenCV `VideoCapture`.
-- `generated`: reserved for future procedural content.
+- `image`: static media URL.
+- `video`: video media URL opened by the receiver.
+- `color` or `generated`: procedural placeholder support.
 
-Sources live in `sources[]` and have stable IDs, names, types, URLs, dimensions, and playback metadata.
+Sources carry stable IDs, names, dimensions, playback options, and optional source-level opacity.
 
-## Surface
+## Shape
 
-A surface is a render target shape. The MVP supports quad surfaces:
+A shape is reusable geometry in `shapes[]`.
 
-- `source_points`: texture coordinates in the source media.
-- `destination_points`: projector/output coordinates.
-- `source_id`: source assigned to the surface.
-- `opacity`, `visible`, `locked`, and `blend_mode`.
+- `quad`: four vertices, rendered with perspective transform.
+- `triangle`: three vertices, rendered with affine transform.
+- `mesh`: reserved placeholder for grid mapping.
+- `ellipse` and `polygon`: reserved placeholders.
 
-Polygon and grid surfaces are reserved for future renderer work.
+Input shapes describe the source crop/sample area. Output shapes describe projector/output placement.
 
-## Mapper
+## Mapping
 
-The mapper owns a scene, builds source and surface objects, resolves `source_id`, renders visible surfaces in order, and applies OpenCV perspective warps for quads.
+A mapping is the layer object in `mappings[]`. It connects one source to one input shape and one output shape.
 
-Unmapped surfaces are valid in the editor and skipped by the renderer.
+Important mapping fields:
 
-## Scene
+- `source_id`
+- `input_shape_id`
+- `output_shape_id`
+- `visible`
+- `locked`
+- `solo`
+- `opacity`
+- `blend_mode`
+- `depth`
 
-A scene is saved JSON containing:
+The renderer draws visible mappings ordered by `depth`. If any mapping is soloed, only soloed visible mappings render.
 
-- `version`
-- `project_name`
-- `output`
-- `sources`
-- `surfaces`
-- `metadata`
+## Migration
 
-Legacy scenes that stored `surface.media` are migrated by creating a source and setting `surface.source_id`.
+Map Daddy still accepts `0.2.0` scenes with `surfaces[]`.
+
+- `surface.source_points` becomes an input shape's `vertices`.
+- `surface.destination_points` becomes an output shape's `vertices`.
+- `surface.source_id` becomes `mapping.source_id`.
+- Surface visibility, lock, opacity, blend mode, and depth become mapping properties.
+
+New saves are written as `0.3.0`.
