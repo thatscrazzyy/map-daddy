@@ -99,6 +99,13 @@ function generateSecret() {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+function sessionSecretFromBody(body) {
+  const raw = body.session_secret ?? body.sessionSecret ?? body.password;
+  if (typeof raw !== 'string') return null;
+  const secret = raw.trim();
+  return secret ? secret : null;
+}
+
 async function sha256(value) {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -129,7 +136,11 @@ function contentTypeForKey(key) {
 async function handleCreateSession(request, env) {
   const body = await request.json().catch(() => ({}));
   const code = generatePairingCode();
-  const secret = generateSecret();
+  const customSecret = sessionSecretFromBody(body);
+  if (customSecret && (customSecret.length < 4 || customSecret.length > 128)) {
+    return jsonResponse(request, env, { detail: 'Password must be 4 to 128 characters.' }, 400);
+  }
+  const secret = customSecret || generateSecret();
   const now = Date.now();
   const requestedTtl = Number(body.ttl_ms || DEFAULT_SESSION_TTL_MS);
   const ttl = Math.max(60 * 1000, Math.min(requestedTtl, MAX_SESSION_TTL_MS));

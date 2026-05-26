@@ -23,6 +23,20 @@ Deploy:
 npx wrangler deploy
 ```
 
+Create a pairing session with an auto-generated password:
+
+```bash
+curl -X POST https://map-daddy.YOUR_SUBDOMAIN.workers.dev/sessions
+```
+
+Create a pairing session with your own receiver password:
+
+```bash
+curl -X POST https://map-daddy.YOUR_SUBDOMAIN.workers.dev/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"session_secret":"my-custom-password"}'
+```
+
 Use the deployed Worker URL for all frontend variables:
 
 ```text

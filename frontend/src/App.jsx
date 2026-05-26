@@ -107,14 +107,6 @@ function editorViewBox(view, width, height) {
   return `${view.panX} ${view.panY} ${width / view.zoom} ${height / view.zoom}`;
 }
 
-function sourceDimensions(source, scene) {
-  const fallback = outputSize(scene);
-  return {
-    width: Number(source?.width || fallback.width),
-    height: Number(source?.height || fallback.height)
-  };
-}
-
 function IconButton({ children, onClick, title, active = false, className = '' }) {
   return (
     <button
@@ -141,12 +133,13 @@ function StatusPill({ children, tone = 'cyan' }) {
   return <span className={`mono rounded border px-2 py-0.5 text-[10px] uppercase tracking-wider ${tones[tone]}`}>{children}</span>;
 }
 
-function TopBar({ activePage, relayStatus, rendererConnected, session, startSession, endSession, sessionError }) {
+function TopBar({ activePage, relayStatus, rendererConnected, session, startSession, endSession, sessionError, sessionPassword, setSessionPassword, saveStatus }) {
   return (
     <header className="fixed left-0 right-0 top-0 z-50 h-12 border-b border-white/10 bg-[#121318]/85 backdrop-blur-xl shadow-[0_0_14px_rgba(0,219,233,0.12)]">
       <div className="flex h-full items-center justify-between pl-[296px] pr-5 max-md:pl-4">
         <div className="flex min-w-0 items-center gap-4">
           <span className="neon-cyan text-xl font-black tracking-tight">MAP DADDY v0.3</span>
+          {saveStatus && <span className="mono animate-pulse text-[10px] uppercase tracking-widest text-cyan-300">{saveStatus}</span>}
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden items-center gap-2 sm:flex">
@@ -154,9 +147,23 @@ function TopBar({ activePage, relayStatus, rendererConnected, session, startSess
             <span className="mono text-xs uppercase tracking-wider text-lime-300">Live Status</span>
           </div>
           {!session ? (
-            <button onClick={startSession} disabled={relayStatus === 'creating'} className="mono rounded border border-cyan-300/30 bg-cyan-100 px-3 py-1.5 text-xs uppercase tracking-wider text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60">
-              {relayStatus === 'creating' ? 'Starting' : 'Start Session'}
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="password"
+                value={sessionPassword}
+                onChange={(event) => setSessionPassword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') startSession();
+                }}
+                minLength={4}
+                maxLength={128}
+                placeholder="Receiver password"
+                className="h-8 w-36 rounded border border-white/10 bg-black/30 px-2 text-xs text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-300/40 sm:w-44"
+              />
+              <button onClick={startSession} disabled={relayStatus === 'creating'} className="mono rounded border border-cyan-300/30 bg-cyan-100 px-3 py-1.5 text-xs uppercase tracking-wider text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60">
+                {relayStatus === 'creating' ? 'Starting' : 'Start Session'}
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2 rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs">
               <button onClick={() => copyText(session.pairingCode)} className="mono text-lime-300">{session.pairingCode}<Copy size={11} className="ml-1 inline" /></button>
@@ -285,39 +292,74 @@ function DashboardPage({ scene, setActivePage, addMapping, startSession }) {
   );
 }
 
-function CanvasEditor({ title, subtitle, scene, mapping, shape, source, mode, selectedVertex, onVertexPointerDown, onBackgroundPointerDown, svgRef, view }) {
-  const dimensions = mode === 'input' ? sourceDimensions(source, scene) : outputSize(scene);
-  const isInput = mode === 'input';
-  const showMedia = isInput && source?.url;
-  const gridId = `${mode}-grid`;
+function InputCanvas({ scene, selectedMapping, selectedSource, inputShape, selectedVertex, onVertexPointerDown, onBackgroundPointerDown, svgRef, view, isPanning, spacePressed }) {
+  const dimensions = selectedSource ? { width: selectedSource.width || 1920, height: selectedSource.height || 1080 } : outputSize(scene);
+  const showMedia = selectedSource?.url;
+  const gridId = 'input-grid';
+  const currentView = view || { zoom: 1, panX: 0, panY: 0 };
+  
   return (
     <section className="glass-panel flex min-h-0 flex-1 flex-col rounded">
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
-          <p className="mono text-[10px] uppercase tracking-wider text-slate-500">{subtitle}</p>
+          <h2 className="text-sm font-semibold text-slate-100">Media Crop</h2>
+          <p className="mono text-[10px] uppercase tracking-wider text-slate-500">{selectedSource?.name || 'No source assigned'}</p>
         </div>
         <div className="mono text-[10px] text-cyan-100">{dimensions.width} x {dimensions.height}</div>
       </div>
       <div className="relative min-h-[260px] flex-1 overflow-hidden rounded-b bg-black">
-        {showMedia && (source.type === 'video'
-          ? <video className="absolute inset-0 h-full w-full object-contain opacity-60" src={source.url} muted loop autoPlay playsInline />
-          : <img className="absolute inset-0 h-full w-full object-contain opacity-60" src={source.url} alt="" />)}
+        {showMedia && (selectedSource.type === 'video'
+          ? <video className="absolute inset-0 h-full w-full object-contain opacity-60" src={selectedSource.url} muted loop autoPlay playsInline />
+          : <img className="absolute inset-0 h-full w-full object-contain opacity-60" src={selectedSource.url} alt="" />)}
         {!showMedia && <div className="neon-thumb absolute inset-0 opacity-40" />}
-        <svg ref={svgRef} viewBox={editorViewBox(view, dimensions.width, dimensions.height)} className="absolute inset-0 h-full w-full touch-none" onPointerDown={(event) => onBackgroundPointerDown(mode, event)}>
+        <svg
+          ref={svgRef}
+          viewBox={editorViewBox(currentView, dimensions.width, dimensions.height)}
+          className={`absolute inset-0 h-full w-full touch-none ${
+            (spacePressed || isPanning) 
+              ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') 
+              : 'cursor-grab'
+          }`}
+          onPointerDown={(event) => onBackgroundPointerDown('input', event)}
+        >
           <defs>
             <pattern id={gridId} width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
               <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
             </pattern>
+            <pattern id="lock-stripes" width="12" height="12" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="12" stroke="rgba(0,240,255,0.2)" strokeWidth="4" />
+            </pattern>
           </defs>
-          <rect x="0" y="0" width={dimensions.width} height={dimensions.height} fill={`url(#${gridId})`} />
-          {shape && (
-            <g opacity={mapping?.visible === false ? 0.2 : 1}>
-              <path d={pointsToPath(shape.vertices)} fill={isInput ? 'rgba(0,240,255,0.12)' : 'rgba(255,36,228,0.12)'} stroke={isInput ? '#7df4ff' : '#ff24e4'} strokeWidth={4 / view.zoom} />
-              {shape.vertices.map((point, index) => {
-                const active = selectedVertex?.mode === mode && selectedVertex.index === index;
+          <rect data-canvas-background="true" x="0" y="0" width={dimensions.width} height={dimensions.height} fill={`url(#${gridId})`} />
+          {inputShape && (
+            <g opacity={selectedMapping?.locked ? 0.55 : 1}>
+              {selectedMapping?.locked && (
+                <path
+                  d={pointsToPath(inputShape.vertices)}
+                  fill="url(#lock-stripes)"
+                />
+              )}
+              <path
+                d={pointsToPath(inputShape.vertices)}
+                fill="rgba(0,240,255,0.12)"
+                stroke="#7df4ff"
+                strokeDasharray={selectedMapping?.locked ? `${12 / currentView.zoom} ${8 / currentView.zoom}` : undefined}
+                strokeWidth={4 / currentView.zoom}
+              />
+              {inputShape.vertices.map((point, index) => {
+                const active = selectedVertex?.mode === 'input' && selectedVertex.index === index;
                 return (
-                  <circle key={index} cx={point[0]} cy={point[1]} r={active ? 17 / view.zoom : 13 / view.zoom} fill="#0a0b10" stroke={active ? '#e3e1e9' : (isInput ? '#7df4ff' : '#ff24e4')} strokeWidth={4 / view.zoom} className={mapping?.locked || shape.locked ? 'cursor-not-allowed' : 'cursor-move'} onPointerDown={(event) => onVertexPointerDown(mode, index, event)} />
+                  <circle
+                    key={index}
+                    cx={point[0]}
+                    cy={point[1]}
+                    r={active ? 17 / currentView.zoom : 13 / currentView.zoom}
+                    fill="#0a0b10"
+                    stroke={active ? '#e3e1e9' : '#7df4ff'}
+                    strokeWidth={4 / currentView.zoom}
+                    className={spacePressed ? 'cursor-grab' : (selectedMapping?.locked || inputShape.locked ? 'cursor-not-allowed' : 'cursor-move')}
+                    onPointerDown={(event) => onVertexPointerDown('input', index, event)}
+                  />
                 );
               })}
             </g>
@@ -328,11 +370,95 @@ function CanvasEditor({ title, subtitle, scene, mapping, shape, source, mode, se
   );
 }
 
+function OutputCanvas({ scene, selectedMapping, selectedMappingId, layerMappings, selectedVertex, onVertexPointerDown, onBackgroundPointerDown, svgRef, view, isPanning, spacePressed }) {
+  const dimensions = outputSize(scene);
+  const gridId = 'renderer-grid';
+  const shapeById = new Map((scene.shapes || []).map((shape) => [shape.id, shape]));
+  const visibleMappings = layerMappings.filter((mapping) => mapping.visible !== false);
+  const currentView = view || { zoom: 1, panX: 0, panY: 0 };
+  
+  return (
+    <section className="glass-panel flex min-h-0 flex-1 flex-col rounded">
+      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-100">Projector Output</h2>
+          <p className="mono text-[10px] uppercase tracking-wider text-slate-500">Physical projection space</p>
+        </div>
+        <div className="mono text-[10px] text-cyan-100">{dimensions.width} x {dimensions.height}</div>
+      </div>
+      <div className="relative min-h-[260px] flex-1 overflow-hidden rounded-b bg-black">
+        <div className="neon-thumb absolute inset-0 opacity-20" />
+        <svg
+          ref={svgRef}
+          viewBox={editorViewBox(currentView, dimensions.width, dimensions.height)}
+          className={`absolute inset-0 h-full w-full touch-none ${
+            (spacePressed || isPanning) 
+              ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') 
+              : 'cursor-grab'
+          }`}
+          onPointerDown={(event) => onBackgroundPointerDown('output', event)}
+        >
+          <defs>
+            <pattern id={gridId} width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
+              <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+            </pattern>
+            <pattern id="lock-stripes" width="12" height="12" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="12" stroke="rgba(0,240,255,0.15)" strokeWidth="4" />
+            </pattern>
+          </defs>
+          <rect data-canvas-background="true" x="0" y="0" width={dimensions.width} height={dimensions.height} fill={`url(#${gridId})`} />
+          <rect x="0" y="0" width={dimensions.width} height={dimensions.height} fill="none" stroke="rgba(125,244,255,0.35)" strokeWidth={2 / currentView.zoom} />
+          {visibleMappings.map((mapping) => {
+            const shape = shapeById.get(mapping.output_shape_id);
+            if (!shape) return null;
+            const selected = mapping.id === selectedMappingId;
+            return (
+              <g key={mapping.id} opacity={mapping.locked ? 0.55 : 1}>
+                {mapping.locked && (
+                  <path
+                    d={pointsToPath(shape.vertices)}
+                    fill="url(#lock-stripes)"
+                  />
+                )}
+                <path
+                  d={pointsToPath(shape.vertices)}
+                  fill={selected ? 'rgba(255,36,228,0.15)' : 'rgba(0,240,255,0.08)'}
+                  stroke={selected ? '#ff24e4' : '#7df4ff'}
+                  strokeDasharray={mapping.locked ? `${12 / currentView.zoom} ${8 / currentView.zoom}` : undefined}
+                  strokeWidth={(selected ? 4 : 2.5) / currentView.zoom}
+                />
+              </g>
+            );
+          })}
+          {selectedMapping && shapeById.get(selectedMapping.output_shape_id)?.vertices.map((point, index) => {
+            const shape = shapeById.get(selectedMapping.output_shape_id);
+            const active = selectedVertex?.mode === 'output' && selectedVertex.index === index;
+            return (
+              <circle
+                key={index}
+                cx={point[0]}
+                cy={point[1]}
+                r={active ? 17 / currentView.zoom : 13 / currentView.zoom}
+                fill="#0a0b10"
+                stroke={active ? '#e3e1e9' : '#ff24e4'}
+                strokeWidth={4 / currentView.zoom}
+                className={spacePressed ? 'cursor-grab' : (selectedMapping.locked || shape.locked ? 'cursor-not-allowed' : 'cursor-move')}
+                onPointerDown={(event) => onVertexPointerDown('output', index, event)}
+              />
+            );
+          })}
+        </svg>
+      </div>
+    </section>
+  );
+}
+
 function WorkspacePage(props) {
   const {
-    scene, selectedMapping, selectedMappingId, setSelectedMappingId, selectedSource, inputShape, outputShape, selectedVertex,
-    layerMappings, snapEnabled, setSnapEnabled, runCommand, addMapping, saveSceneLocally, fitViews, zoomView, nudgeView,
-    handleVertexPointerDown, handleBackgroundPointerDown, inputSvgRef, outputSvgRef, inputView, outputView, handleMediaUpload
+    scene, selectedMapping, selectedMappingId, setSelectedMappingId, selectedVertex, selectedSource, inputShape,
+    layerMappings, snapEnabled, setSnapEnabled, runCommand, addMapping, saveSceneLocally, fitViews, zoomView,      
+    handleVertexPointerDown, handleBackgroundPointerDown, inputSvgRef, outputSvgRef, inputView, outputView, handleMediaUpload, dragging,
+    spacePressed, confirmAction
   } = props;
   return (
     <main className="flex h-screen bg-[#0a0b10] pl-[280px] pt-12 max-md:pl-0">
@@ -352,30 +478,27 @@ function WorkspacePage(props) {
           <div className="flex min-w-0 flex-1 flex-col gap-3 p-3">
             <div className="glass-panel flex flex-wrap items-center gap-2 rounded px-3 py-2 text-sm">
               <MousePointer2 size={16} className="text-slate-400" />
-              <IconButton onClick={() => zoomView('input', 1.2)} title="Zoom source in"><ZoomIn size={15} /></IconButton>
-              <IconButton onClick={() => zoomView('input', 0.84)} title="Zoom source out"><ZoomOut size={15} /></IconButton>
+              <IconButton onClick={() => zoomView('input', 1.2)} title="Zoom media in"><ZoomIn size={15} /></IconButton>
+              <IconButton onClick={() => zoomView('input', 0.84)} title="Zoom media out"><ZoomOut size={15} /></IconButton>
               <IconButton onClick={() => zoomView('output', 1.2)} title="Zoom output in"><ZoomIn size={15} /></IconButton>
               <IconButton onClick={() => zoomView('output', 0.84)} title="Zoom output out"><ZoomOut size={15} /></IconButton>
-              <button onClick={() => nudgeView('input', -80, 0)} className="mono rounded border border-white/10 px-2 py-1 text-xs text-slate-300">Input -X</button>
-              <button onClick={() => nudgeView('input', 80, 0)} className="mono rounded border border-white/10 px-2 py-1 text-xs text-slate-300">Input +X</button>
-              <button onClick={() => nudgeView('output', -80, 0)} className="mono rounded border border-white/10 px-2 py-1 text-xs text-slate-300">Output -X</button>
-              <button onClick={() => nudgeView('output', 80, 0)} className="mono rounded border border-white/10 px-2 py-1 text-xs text-slate-300">Output +X</button>
+              <span className="mono ml-auto text-[10px] uppercase tracking-wider text-slate-500">Drag empty canvas to pan</span>
             </div>
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-2">
-              <CanvasEditor title="Source / Input" subtitle={selectedSource?.name || 'No source'} scene={scene} mapping={selectedMapping} shape={inputShape} source={selectedSource} mode="input" selectedVertex={selectedVertex} onVertexPointerDown={handleVertexPointerDown} onBackgroundPointerDown={handleBackgroundPointerDown} svgRef={inputSvgRef} view={inputView} />
-              <CanvasEditor title="Destination / Output" subtitle={outputShape?.type || 'No shape'} scene={scene} mapping={selectedMapping} shape={outputShape} source={selectedSource} mode="output" selectedVertex={selectedVertex} onVertexPointerDown={handleVertexPointerDown} onBackgroundPointerDown={handleBackgroundPointerDown} svgRef={outputSvgRef} view={outputView} />
+              <InputCanvas scene={scene} selectedMapping={selectedMapping} selectedSource={selectedSource} inputShape={inputShape} selectedVertex={selectedVertex} onVertexPointerDown={handleVertexPointerDown} onBackgroundPointerDown={handleBackgroundPointerDown} svgRef={inputSvgRef} view={inputView} isPanning={dragging?.type === 'pan' && dragging?.mode === 'input'} spacePressed={spacePressed} />
+              <OutputCanvas scene={scene} selectedMapping={selectedMapping} selectedMappingId={selectedMappingId} layerMappings={layerMappings} selectedVertex={selectedVertex} onVertexPointerDown={handleVertexPointerDown} onBackgroundPointerDown={handleBackgroundPointerDown} svgRef={outputSvgRef} view={outputView} isPanning={dragging?.type === 'pan' && dragging?.mode === 'output'} spacePressed={spacePressed} />
             </div>
-          </div>
-          <aside className="flex w-[380px] shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#161922]/95">
+          </div>          <aside className="flex w-[380px] shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#161922]/95">
             <section className="flex h-[34%] min-h-[150px] max-h-[300px] shrink-0 flex-col border-b border-white/10">
               <div className="shrink-0 border-b border-white/10 px-4 py-3"><h2 className="mono text-xs uppercase tracking-wider text-slate-200">Layers</h2></div>
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {layerMappings.map((mapping) => (
-                  <button key={mapping.id} onClick={() => setSelectedMappingId(mapping.id)} className={`mb-1 flex w-full items-center gap-2 rounded border p-2 text-left ${selectedMappingId === mapping.id ? 'border-cyan-300/35 bg-cyan-300/10 text-cyan-100' : 'border-transparent text-slate-300 hover:bg-white/[0.05]'}`}>
-                    {mapping.visible === false ? <EyeOff size={16} /> : <Eye size={16} />}
-                    <Layers size={16} className="text-slate-500" />
+                  <button key={mapping.id} onClick={() => setSelectedMappingId(mapping.id)} className={`mb-1 flex w-full items-center gap-2 rounded border p-2 text-left transition ${mapping.locked ? 'opacity-50' : ''} ${selectedMappingId === mapping.id ? 'border-cyan-300/35 bg-cyan-300/10 text-cyan-100 shadow-[0_0_8px_rgba(0,240,255,0.1)]' : 'border-transparent text-slate-300 hover:bg-white/[0.05]'}`}>
+                    {mapping.visible === false ? <EyeOff size={16} className="shrink-0" /> : <Eye size={16} className="shrink-0" />}
+                    <Layers size={16} className="text-slate-500 shrink-0" />
+                    {mapping.solo && <span className="h-2.5 w-2.5 rounded-full bg-lime-300 live-dot mr-1 shrink-0" title="Solo Active" />}
                     <span className="min-w-0 flex-1 truncate text-sm">{mapping.name}</span>
-                    {mapping.locked ? <Lock size={15} /> : <Unlock size={15} />}
+                    {mapping.locked ? <Lock size={15} className="shrink-0" /> : <Unlock size={15} className="shrink-0" />}
                   </button>
                 ))}
               </div>
@@ -402,7 +525,7 @@ function WorkspacePage(props) {
                     <button onClick={() => runCommand(new ReorderMappingCommand(selectedMapping.id, 1))} className="rounded border border-white/10 py-2 text-sm">Move Up</button>
                     <button onClick={() => runCommand(new ReorderMappingCommand(selectedMapping.id, -1))} className="rounded border border-white/10 py-2 text-sm">Move Down</button>
                     <button onClick={() => runCommand(new DuplicateMappingCommand(selectedMapping.id), true)} className="rounded border border-white/10 py-2 text-sm">Duplicate</button>
-                    <button onClick={() => { runCommand(new DeleteMappingCommand(selectedMapping.id)); setSelectedMappingId(null); }} className="rounded border border-red-300/25 py-2 text-sm text-red-200">Delete</button>
+                    <button onClick={() => { confirmAction('Delete Layer', 'Are you sure you want to delete this mapping layer?', () => { runCommand(new DeleteMappingCommand(selectedMapping.id)); setSelectedMappingId(null); }); }} className="rounded border border-red-300/25 py-2 text-sm text-red-200">Delete</button>
                   </div>
                   <div>
                     <label className="mono mb-2 block text-[10px] uppercase text-slate-500">Source</label>
@@ -426,7 +549,7 @@ function WorkspacePage(props) {
   );
 }
 
-function LibraryPage({ scene, setActivePage, selectedMapping, handleMediaUpload }) {
+function LibraryPage({ scene, setActivePage, selectedMapping, handleMediaUpload, handleDeleteAsset }) {
   const [query, setQuery] = useState('');
   const assets = scene.sources.length ? scene.sources : [
     { id: 'demo_asset_1', name: 'Quantum_Flux_Loop_V3', type: 'video', width: 3840, height: 2160 },
@@ -459,13 +582,26 @@ function LibraryPage({ scene, setActivePage, selectedMapping, handleMediaUpload 
         </div>
         <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto p-6 lg:grid-cols-3 xl:grid-cols-4">
           {visibleAssets.map((asset, index) => (
-            <button key={asset.id} onClick={() => setActivePage('workspace')} className={`glass-card flex h-[220px] flex-col overflow-hidden rounded text-left ${index === 0 ? 'border-cyan-200/80 shadow-[0_0_16px_rgba(0,219,233,0.16)]' : ''}`}>
-              <div className={`${index === 1 ? 'wire-thumb' : 'neon-thumb'} relative h-[140px]`}><StatusPill tone={asset.type === 'video' ? 'cyan' : 'magenta'}>{asset.type || 'media'}</StatusPill></div>
-              <div className="flex flex-1 flex-col p-3">
-                <div className="truncate font-semibold">{asset.name}</div>
+            <div key={asset.id} className={`glass-card group relative flex h-[220px] flex-col overflow-hidden rounded text-left ${index === 0 ? 'border-cyan-200/80 shadow-[0_0_16px_rgba(0,219,233,0.16)]' : ''}`}>
+              <button onClick={() => setActivePage('workspace')} className="absolute inset-0 z-0 text-left cursor-pointer" />
+              <div className={`${index === 1 ? 'wire-thumb' : 'neon-thumb'} relative h-[140px] z-10`}>
+                <StatusPill tone={asset.type === 'video' ? 'cyan' : 'magenta'}>{asset.type || 'media'}</StatusPill>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteAsset(asset);
+                  }}
+                  className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded bg-black/60 text-red-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-500 hover:text-white cursor-pointer"
+                  title="Delete asset"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="flex flex-1 flex-col p-3 z-10 pointer-events-none">
+                <div className="truncate font-semibold text-slate-100">{asset.name}</div>
                 <div className="mt-auto flex items-center justify-between"><span className="mono text-[10px] text-slate-500">{asset.width || 1920} x {asset.height || 1080}</span><ChevronDown size={16} className="text-slate-500" /></div>
               </div>
-            </button>
+            </div>
           ))}
           {visibleAssets.length === 0 && (
             <div className="col-span-full flex h-48 items-center justify-center rounded border border-white/10 text-sm text-slate-500">No assets match that search.</div>
@@ -548,6 +684,22 @@ function App() {
   const [rendererConnected, setRendererConnected] = useState(false);
   const [rendererStatus, setRendererStatus] = useState('');
   const [sessionError, setSessionError] = useState('');
+  const [sessionPassword, setSessionPassword] = useState('');
+  const [saveStatus, setSaveStatus] = useState('');
+  
+  const [toast, setToast] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [spacePressed, setSpacePressed] = useState(false);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  };
+
+  const confirmAction = (title, message, onConfirm) => {
+    setConfirmDialog({ title, message, onConfirm });
+  };
 
   const inputSvgRef = useRef(null);
   const outputSvgRef = useRef(null);
@@ -586,11 +738,31 @@ function App() {
     const onKeyDown = (event) => {
       const currentScene = sceneRef.current;
       if (!currentScene || activePage !== 'workspace') return;
+      
+      if (event.code === 'Space') {
+        if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT' && document.activeElement.tagName !== 'TEXTAREA') {
+          event.preventDefault();
+          setSpacePressed(true);
+          return;
+        }
+      }
+
       const meta = event.ctrlKey || event.metaKey;
       if (meta && event.key.toLowerCase() === 'z' && event.shiftKey) { event.preventDefault(); redo(); return; }
       if (meta && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); return; }
       if (meta && event.key.toLowerCase() === 'd') { event.preventDefault(); if (selectedMappingId) runCommand(new DuplicateMappingCommand(selectedMappingId), true); return; }
-      if (event.key === 'Delete' && selectedMappingId) { event.preventDefault(); runCommand(new DeleteMappingCommand(selectedMappingId)); setSelectedMappingId(null); return; }
+      if (event.key === 'Delete' && selectedMappingId) {
+        event.preventDefault();
+        confirmAction(
+          'Delete Layer',
+          'Are you sure you want to delete this mapping layer?',
+          () => {
+            runCommand(new DeleteMappingCommand(selectedMappingId));
+            setSelectedMappingId(null);
+          }
+        );
+        return;
+      }
       if (event.key.toLowerCase() === 'f') { event.preventDefault(); fitViews(); return; }
       if (event.key.toLowerCase() === 'g') { event.preventDefault(); setSnapEnabled((value) => !value); return; }
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key) && selectedVertex && selectedMapping) {
@@ -603,8 +775,19 @@ function App() {
         runCommand(new MoveVertexCommand(shape.id, selectedVertex.index, from, [from[0] + direction[0], from[1] + direction[1]]));
       }
     };
+
+    const onKeyUp = (event) => {
+      if (event.code === 'Space') {
+        setSpacePressed(false);
+      }
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [activePage, selectedMappingId, selectedVertex, selectedMapping, inputShape, outputShape]);
 
   const fetchScene = async () => {
@@ -623,21 +806,28 @@ function App() {
     if (!API_URL) { setSessionError('No API URL configured for saving scenes.'); return; }
     const sceneToSave = migrateScene(newScene || sceneRef.current);
     try {
+      setSaveStatus('Saving...');
       await fetch(`${API_URL.replace(/\/$/, '')}/api/current-scene`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sceneToSave) });
+      setSaveStatus('Saved!');
+      setTimeout(() => setSaveStatus(''), 2000);
     } catch (e) {
       console.error('Failed to save scene', e);
+      setSaveStatus('Save Error');
+      setTimeout(() => setSaveStatus(''), 3000);
       setSessionError('Could not save scene to the backend.');
     }
   };
 
-  const createSession = async () => {
+  const createSession = async (password = '') => {
     const apiBase = (API_URL || httpUrlFromRelay(RELAY_URL)).replace(/\/$/, '');
     const endpoints = [`${apiBase}/api/sessions/create`, `${httpUrlFromRelay(RELAY_URL).replace(/\/$/, '')}/sessions`];
+    const trimmedPassword = password.trim();
+    const body = trimmedPassword ? JSON.stringify({ session_secret: trimmedPassword }) : '{}';
     let lastError = null;
     for (const endpoint of endpoints) {
       if (!endpoint || endpoint === '/api/sessions/create') continue;
       try {
-        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
         if (res.ok) return res.json();
         lastError = new Error(`${endpoint} returned ${res.status}`);
       } catch (e) { lastError = e; }
@@ -647,12 +837,18 @@ function App() {
 
   const startSession = async () => {
     setSessionError('');
+    const trimmedPassword = sessionPassword.trim();
+    if (trimmedPassword && (trimmedPassword.length < 4 || trimmedPassword.length > 128)) {
+      setSessionError('Password must be 4 to 128 characters.');
+      return;
+    }
     setRelayStatus('creating');
     setRendererConnected(false);
     try {
-      const created = await createSession();
+      const created = await createSession(trimmedPassword);
       const nextSession = { relayUrl: created.relay_url || RELAY_URL, pairingCode: created.pairing_code, sessionSecret: created.session_secret, expiresAt: created.expires_at };
       setSession(nextSession);
+      setSessionPassword('');
       sessionRef.current = nextSession;
       connectController(nextSession);
     } catch (e) {
@@ -761,24 +957,20 @@ function App() {
     setOutputView({ zoom: 1, panX: 0, panY: 0 });
   };
 
-  const nudgeView = (mode, dx, dy) => {
-    const setter = mode === 'input' ? setInputView : setOutputView;
-    setter((view) => ({ ...view, panX: view.panX + dx / view.zoom, panY: view.panY + dy / view.zoom }));
-  };
-
   const zoomView = (mode, factor) => {
     const setter = mode === 'input' ? setInputView : setOutputView;
     setter((view) => ({ ...view, zoom: clamp(view.zoom * factor, 0.25, 8) }));
   };
-
   const snapPoint = (mode, shapeId, point) => {
     if (!snapEnabled || !sceneRef.current) return point;
-    const dimensions = mode === 'input' ? sourceDimensions(selectedSource, sceneRef.current) : outputSize(sceneRef.current);
+    const dimensions = mode === 'input' && selectedSource ? { width: selectedSource.width || 1920, height: selectedSource.height || 1080 } : outputSize(sceneRef.current);
     let snapped = [clamp(Math.round(point[0] / GRID_SIZE) * GRID_SIZE, 0, dimensions.width), clamp(Math.round(point[1] / GRID_SIZE) * GRID_SIZE, 0, dimensions.height)];
     for (const shape of sceneRef.current.shapes || []) {
       if (shape.id === shapeId) continue;
       for (const vertex of shape.vertices || []) {
-        if (Math.abs(vertex[0] - point[0]) <= GRID_SIZE && Math.abs(vertex[1] - point[1]) <= GRID_SIZE) snapped = [vertex[0], vertex[1]];
+        if (Math.abs(vertex[0] - point[0]) <= GRID_SIZE && Math.abs(vertex[1] - point[1]) <= GRID_SIZE) {
+          snapped = [vertex[0], vertex[1]];
+        }
       }
     }
     return snapped;
@@ -786,6 +978,10 @@ function App() {
 
   const handleVertexPointerDown = (mode, index, event) => {
     event.stopPropagation();
+    if (spacePressed) {
+      handleBackgroundPointerDown(mode, event);
+      return;
+    }
     if (!selectedMapping) return;
     const shape = mode === 'input' ? inputShape : outputShape;
     if (!shape || selectedMapping.locked || shape.locked) return;
@@ -795,11 +991,34 @@ function App() {
   };
 
   const handleBackgroundPointerDown = (mode, event) => {
-    if (event.target.tagName === 'svg') setSelectedVertex(null);
+    if (event.button !== 0 && event.button !== 1) return;
+    const isMiddleClick = event.button === 1;
+    const isSpaceDrag = spacePressed;
+    if (isMiddleClick || isSpaceDrag || event.target.tagName === 'svg' || event.target.dataset.canvasBackground === 'true') {
+      setSelectedVertex(null);
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      const view = mode === 'input' ? inputView : outputView;
+      setDragging({ type: 'pan', mode, startX: event.clientX, startY: event.clientY, view });
+    }
   };
 
   const handlePointerMove = (event) => {
     if (!dragging) return;
+    if (dragging.type === 'pan') {
+      const svg = dragging.mode === 'input' ? inputSvgRef.current : outputSvgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const dimensions = dragging.mode === 'input' && selectedSource ? { width: selectedSource.width || 1920, height: selectedSource.height || 1080 } : outputSize(sceneRef.current);
+      const scaleX = (dimensions.width / dragging.view.zoom) / Math.max(rect.width, 1);
+      const scaleY = (dimensions.height / dragging.view.zoom) / Math.max(rect.height, 1);
+      const setter = dragging.mode === 'input' ? setInputView : setOutputView;
+      setter({
+        ...dragging.view,
+        panX: dragging.view.panX - ((event.clientX - dragging.startX) * scaleX),
+        panY: dragging.view.panY - ((event.clientY - dragging.startY) * scaleY)
+      });
+      return;
+    }
     const svg = dragging.mode === 'input' ? inputSvgRef.current : outputSvgRef.current;
     if (!svg) return;
     const point = snapPoint(dragging.mode, dragging.shapeId, svgPoint(svg, event));
@@ -827,6 +1046,38 @@ function App() {
     runCommand(command, true);
   };
 
+  const handleDeleteAsset = (asset) => {
+    confirmAction(
+      'Delete Asset',
+      `Are you sure you want to delete "${asset.name}" from local storage? This will remove it from all mappings using this source.`,
+      async () => {
+        try {
+          let filename = asset.id;
+          if (asset.url && asset.url.includes('/media/')) {
+            filename = asset.url.split('/media/')[1];
+          }
+          if (API_URL) {
+            await fetch(`${API_URL.replace(/\/$/, '')}/api/media/${filename}`, { method: 'DELETE' });
+          }
+          const before = sceneRef.current;
+          const next = cloneScene(before);
+          next.sources = next.sources.filter((s) => s.id !== asset.id);
+          next.mappings = next.mappings.map((mapping) => {
+            if (mapping.source_id === asset.id) {
+              return { ...mapping, source_id: '' };
+            }
+            return mapping;
+          });
+          commitScene(next);
+          showToast('Asset deleted successfully!', 'success');
+        } catch (e) {
+          console.error('Failed to delete asset', e);
+          showToast('Failed to delete asset.', 'error');
+        }
+      }
+    );
+  };
+
   const handleMediaUpload = async (event) => {
     const file = event.target.files[0];
     if (!file || !API_URL || !selectedMapping) return;
@@ -843,8 +1094,10 @@ function App() {
       const mapping = next.mappings.find((item) => item.id === selectedMapping.id);
       if (mapping) mapping.source_id = sourceId;
       runCommand(new UpdateSceneSnapshotCommand('Upload source', before, next));
+      showToast('Media uploaded and assigned!', 'success');
     } catch (e) {
       console.error('Upload failed', e);
+      showToast('Media upload failed.', 'error');
       setSessionError('Media upload failed.');
     } finally {
       event.target.value = '';
@@ -855,19 +1108,53 @@ function App() {
 
   const workspaceProps = {
     scene, selectedMapping, selectedMappingId, setSelectedMappingId, selectedSource, inputShape, outputShape, selectedVertex,
-    layerMappings, snapEnabled, setSnapEnabled, runCommand, addMapping, saveSceneLocally, fitViews, zoomView, nudgeView,
-    handleVertexPointerDown, handleBackgroundPointerDown, inputSvgRef, outputSvgRef, inputView, outputView, handleMediaUpload, commitScene
+    layerMappings, snapEnabled, setSnapEnabled, runCommand, addMapping, saveSceneLocally, fitViews, zoomView,
+    handleVertexPointerDown, handleBackgroundPointerDown, inputSvgRef, outputSvgRef, inputView, outputView, handleMediaUpload, commitScene, dragging,
+    spacePressed, confirmAction
   };
 
   return (
     <div className="min-h-screen bg-[#0a0b10] text-slate-100" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp}>
       <div className="fixed left-0 right-0 top-0 z-[60] h-0.5 bg-gradient-to-r from-transparent via-lime-300 to-transparent opacity-80" />
-      <TopBar activePage={activePage} relayStatus={relayStatus} rendererConnected={rendererConnected} session={session} startSession={startSession} endSession={endSession} sessionError={sessionError || rendererStatus} />
+      <TopBar activePage={activePage} relayStatus={relayStatus} rendererConnected={rendererConnected} session={session} startSession={startSession} endSession={endSession} sessionError={sessionError || rendererStatus} sessionPassword={sessionPassword} setSessionPassword={setSessionPassword} saveStatus={saveStatus} />
       <SideNav activePage={activePage} setActivePage={setActivePage} />
       {activePage === 'dashboard' && <DashboardPage scene={scene} setActivePage={setActivePage} addMapping={addMapping} startSession={startSession} />}
       {activePage === 'workspace' && <WorkspacePage {...workspaceProps} />}
-      {activePage === 'library' && <LibraryPage scene={scene} setActivePage={setActivePage} selectedMapping={selectedMapping} handleMediaUpload={handleMediaUpload} />}
+      {activePage === 'library' && <LibraryPage scene={scene} setActivePage={setActivePage} selectedMapping={selectedMapping} handleMediaUpload={handleMediaUpload} handleDeleteAsset={handleDeleteAsset} />}
       {activePage === 'settings' && <OutputSettingsPage scene={scene} startSession={startSession} saveSceneLocally={saveSceneLocally} />}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[100] flex toast-slide-in items-center gap-3 rounded-lg border border-cyan-300/35 bg-[#121318]/90 px-4 py-3 text-sm text-cyan-100 shadow-[0_0_20px_rgba(0,240,255,0.25)] backdrop-blur-xl">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-300/20 text-cyan-300 font-bold text-xs">✓</span>
+          <span className="mono uppercase tracking-wider text-xs">{toast.message}</span>
+        </div>
+      )}
+
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-sm toast-slide-in rounded-lg border-t-4 border-t-cyan-300 p-6 shadow-[0_0_30px_rgba(0,240,255,0.15)]">
+            <h3 className="text-lg font-bold text-slate-100">{confirmDialog.title}</h3>
+            <p className="mt-3 text-sm text-slate-400">{confirmDialog.message}</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="mono rounded border border-white/10 bg-white/[0.02] px-4 py-2 text-xs uppercase tracking-wider text-slate-300 hover:bg-white/[0.08]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog(null);
+                }}
+                className="mono rounded bg-cyan-100 px-4 py-2 text-xs uppercase tracking-wider text-slate-950 hover:bg-cyan-200"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

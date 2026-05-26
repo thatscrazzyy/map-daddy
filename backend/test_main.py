@@ -2,7 +2,7 @@ import os
 import json
 import pytest
 from fastapi.testclient import TestClient
-from .main import app, SCENE_FILE, EXAMPLE_SCENE_FILE, migrate_scene
+from main import app, SCENE_FILE, EXAMPLE_SCENE_FILE, migrate_scene
 
 client = TestClient(app)
 
@@ -61,3 +61,54 @@ def test_migrate_scene_old_format():
     assert len(migrated["mappings"]) == 1
     assert len(migrated["sources"]) == 1
     assert migrated["sources"][0]["url"] == "/media/test.mp4"
+
+def test_rate_limiter():
+    from main import RateLimitMiddleware
+    RateLimitMiddleware.reset_all()
+    
+    # Send multiple requests to trigger 429
+    # General limit is 100 requests per window
+    hit_rate_limit = False
+    for _ in range(110):
+        res = client.get("/api/current-scene")
+        if res.status_code == 429:
+            hit_rate_limit = True
+            break
+            
+    assert hit_rate_limit
+    
+    # Reset for next tests so they don't block
+    RateLimitMiddleware.reset_all()
+
+def test_get_current_scene_persists_migration():
+    if os.path.exists(SCENE_FILE):
+        os.remove(SCENE_FILE)
+    
+    # Calling get_current_scene should migrate and persist EXAMPLE_SCENE_FILE as SCENE_FILE
+    assert not os.path.exists(SCENE_FILE)
+    response = client.get("/api/current-scene")
+    assert response.status_code == 200
+    assert os.path.exists(SCENE_FILE)
+    
+    # Verify that the created file is valid json and contains the migrated version
+    with open(SCENE_FILE, "r") as f:
+        data = json.load(f)
+    assert data.get("version") == "0.3.0"
+
+def test_delete_media():
+    # First upload an image
+    file_content = b"sample image content"
+    files = {"file": ("test_delete.png", file_content, "image/png")}
+    res_upload = client.post("/api/media/upload", files=files)
+    assert res_upload.status_code == 200
+    data = res_upload.json()
+    filename = data["filename"]
+    
+    # Delete the image using the delete endpoint
+    res_delete = client.delete(f"/api/media/{filename}")
+    assert res_delete.status_code == 200
+    assert res_delete.json() == {"status": "success"}
+    
+    # Attempting to delete it again should return 404
+    res_delete_again = client.delete(f"/api/media/{filename}")
+    assert res_delete_again.status_code == 404

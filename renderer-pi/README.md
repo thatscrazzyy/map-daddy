@@ -12,7 +12,7 @@ Download one of these from GitHub Releases:
 - `MapDaddy-Receiver-Linux-x64`
 - `MapDaddy-Receiver-RaspberryPi-arm64`
 
-Run the executable, enter the pairing code and password shown by the hosted controller, then press `ENTER`.
+Run the executable, enter the pairing code and password shown by the hosted controller, then press `ENTER`. If you set a custom password in the controller before starting the session, enter that same password on the receiver.
 
 ## Install From Source
 

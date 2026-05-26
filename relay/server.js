@@ -42,6 +42,13 @@ function hashSecret(secret) {
   return crypto.createHash('sha256').update(secret).digest('hex');
 }
 
+function sessionSecretFromBody(body) {
+  const raw = body?.session_secret ?? body?.sessionSecret ?? body?.password;
+  if (typeof raw !== 'string') return null;
+  const secret = raw.trim();
+  return secret ? secret : null;
+}
+
 function safeSend(ws, payload) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(payload));
@@ -113,7 +120,11 @@ app.get('/health', (req, res) => {
 app.post('/sessions', (req, res) => {
   cleanupExpiredSessions();
   const code = generatePairingCode();
-  const secret = generateSecret();
+  const customSecret = sessionSecretFromBody(req.body);
+  if (customSecret && (customSecret.length < 4 || customSecret.length > 128)) {
+    return res.status(400).json({ detail: 'Password must be 4 to 128 characters.' });
+  }
+  const secret = customSecret || generateSecret();
   const now = Date.now();
   const ttlMs = Number(req.body?.ttl_ms || DEFAULT_SESSION_TTL_MS);
   const expiresAt = now + Math.max(60 * 1000, Math.min(ttlMs, 24 * 60 * 60 * 1000));
@@ -242,6 +253,10 @@ wss.on('connection', (ws) => {
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  log(`Server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(PORT, () => {
+    log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = { app, server, wss, sessions };

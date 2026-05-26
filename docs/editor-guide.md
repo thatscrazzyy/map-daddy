@@ -1,14 +1,12 @@
 # Editor Guide
 
-The Map Daddy controller now separates source editing from projection placement.
+The Map Daddy controller is renderer-first: the Workspace shows one canvas that represents what the Raspberry Pi receiver sends to the projector.
 
-## Source / Input Editor
+## Renderer Canvas
 
-Use the Source/Input editor to adjust the input shape. For image and video sources this controls the sampled crop area. Drag vertices directly on the source canvas.
+Use the Renderer Canvas to place mapped media in projector coordinates. Drag output vertices to match the physical projection surface. Drag empty canvas space to pan when zoomed in.
 
-## Destination / Output Editor
-
-Use the Destination/Output editor to place the mapped media in projector coordinates. Drag output vertices to match the physical projection surface.
+Input shapes still exist in the scene model so sources can support crop/sample controls later, but the primary hosted workflow keeps the editor focused on the receiver output.
 
 ## Mapping Panel
 
@@ -30,7 +28,7 @@ The layer panel lists mappings in visual depth order. Select a mapping to edit:
 - Arrow keys: nudge selected vertex.
 - `Shift+Arrow`: faster nudge.
 - `Ctrl/Cmd+D`: duplicate selected mapping.
-- `F`: fit views.
+- `F`: fit the renderer canvas.
 - `G`: toggle grid snapping.
 
 Grid snapping also snaps vertices to nearby vertices when practical. Vertex drags are committed when the drag ends so scene updates do not spam the relay during every pointer move.

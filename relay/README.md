@@ -32,6 +32,14 @@ Create a session:
 curl -X POST http://localhost:8080/sessions
 ```
 
+Create a session with your own receiver password:
+
+```bash
+curl -X POST http://localhost:8080/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"session_secret":"my-custom-password"}'
+```
+
 Response:
 
 ```json

@@ -4,13 +4,60 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from datetime import datetime, timezone
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 import shutil
 import re
+import time
+from collections import defaultdict
 
 app = FastAPI(title="Map Daddy API")
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    _instances = []
+
+    def __init__(self, app, limit: int = 100, window: int = 60):
+        super().__init__(app)
+        self.limit = limit
+        self.window = window
+        self.requests = defaultdict(list)
+        self.upload_limit = 5
+        self.upload_requests = defaultdict(list)
+        RateLimitMiddleware._instances.append(self)
+
+    @classmethod
+    def reset_all(cls):
+        for inst in cls._instances:
+            inst.requests.clear()
+            inst.upload_requests.clear()
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith("/api/"):
+            client_ip = request.client.host if request.client else "unknown"
+            now = time.time()
+            
+            if request.url.path == "/api/media/upload" and request.method == "POST":
+                self.upload_requests[client_ip] = [t for t in self.upload_requests[client_ip] if now - t < self.window]
+                if len(self.upload_requests[client_ip]) >= self.upload_limit:
+                    return JSONResponse(
+                        status_code=429,
+                        content={"detail": "Too many uploads. Please try again later."}
+                    )
+                self.upload_requests[client_ip].append(now)
+            else:
+                self.requests[client_ip] = [t for t in self.requests[client_ip] if now - t < self.window]
+                if len(self.requests[client_ip]) >= self.limit:
+                    return JSONResponse(
+                        status_code=429,
+                        content={"detail": "Too many requests. Please try again later."}
+                    )
+                self.requests[client_ip].append(now)
+                
+        response = await call_next(request)
+        return response
 
 def _cors_origins():
     configured = os.getenv("CORS_ORIGINS", "*")
@@ -24,6 +71,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware, limit=100, window=60)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MEDIA_DIR = os.path.abspath(os.getenv("MAP_DADDY_MEDIA_DIR", os.path.join(BASE_DIR, "media")))
@@ -185,10 +233,25 @@ def migrate_scene(scene: dict):
 def get_current_scene():
     if os.path.exists(SCENE_FILE):
         with open(SCENE_FILE, "r") as f:
-            return migrate_scene(json.load(f))
+            raw = json.load(f)
+        migrated = migrate_scene(raw)
+        if migrated.get("version") != raw.get("version") or "surfaces" in raw:
+            try:
+                with open(SCENE_FILE, "w") as f:
+                    json.dump(migrated, f, indent=2)
+            except Exception as e:
+                print(f"Warning: Failed to save migrated scene: {e}")
+        return migrated
     if os.path.exists(EXAMPLE_SCENE_FILE):
         with open(EXAMPLE_SCENE_FILE, "r") as f:
-            return migrate_scene(json.load(f))
+            raw = json.load(f)
+        migrated = migrate_scene(raw)
+        try:
+            with open(SCENE_FILE, "w") as f:
+                json.dump(migrated, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Failed to save migrated example scene: {e}")
+        return migrated
     return {}
 
 @app.post("/api/current-scene")
@@ -198,24 +261,52 @@ def save_current_scene(scene: dict):
         json.dump(scene, f, indent=2)
     return {"status": "success"}
 
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024 # 50MB
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".mp4", ".mov", ".mkv", ".avi", ".webm"}
+
 @app.post("/api/media/upload")
 async def upload_media(file: UploadFile = File(...)):
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
+    
+    # Check file size (approximate)
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(0)
+    if size > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+
     safe_name = _safe_upload_name(file.filename)
     file_path = os.path.join(MEDIA_DIR, safe_name)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     return {"url": f"/media/{safe_name}", "filename": safe_name}
 
+@app.delete("/api/media/{filename}")
+def delete_media(filename: str):
+    file_path = os.path.join(MEDIA_DIR, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="File not found")
+
 @app.post("/api/sessions/create")
-def create_projection_session():
-    request = urllib.request.Request(
+async def create_projection_session(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    relay_request = urllib.request.Request(
         _relay_session_url(),
-        data=b"{}",
+        data=json.dumps(body).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST"
     )
     try:
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with urllib.request.urlopen(relay_request, timeout=5) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         raise HTTPException(status_code=e.code, detail="Relay refused session creation")

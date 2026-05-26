@@ -145,10 +145,10 @@ class MapDaddyReceiver:
                         else:
                             self.config['last_session_secret'] = self.config.get('last_session_secret', '')[:-1]
                     else:
-                        if event.unicode and (event.unicode.isalnum() or event.unicode in "-_."):
-                            if self.active_pairing_field == 0:
+                        if event.unicode:
+                            if self.active_pairing_field == 0 and (event.unicode.isalnum() or event.unicode in "-_."):
                                 self.config['last_pairing_code'] += event.unicode.upper()
-                            else:
+                            elif self.active_pairing_field == 1 and event.unicode.isprintable() and not event.unicode.isspace():
                                 self.config['last_session_secret'] += event.unicode
                 
                 elif self.state == "SETTINGS":

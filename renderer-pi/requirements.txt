@@ -4,3 +4,4 @@ numpy==1.26.2
 requests==2.31.0
 websocket-client==1.7.0
 pyinstaller==6.6.0
+pytest==7.4.3
