@@ -60,8 +60,11 @@ import {
 import { MappingManager, cloneScene, defaultScene, guessSourceType, migrateScene, outputSize } from './mappingManager';
 
 const DEV_BACKEND_URL = import.meta.env.PROD ? '' : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000');
-const API_URL = import.meta.env.VITE_MAP_DADDY_API_URL || import.meta.env.NEXT_PUBLIC_MAP_DADDY_API_URL || DEV_BACKEND_URL;
-const RELAY_URL = import.meta.env.VITE_MAP_DADDY_RELAY_URL || import.meta.env.NEXT_PUBLIC_MAP_DADDY_RELAY_URL || (import.meta.env.PROD ? '' : 'ws://localhost:8080');
+const BASE_API_URL = import.meta.env.VITE_MAP_DADDY_API_URL || import.meta.env.NEXT_PUBLIC_MAP_DADDY_API_URL || DEV_BACKEND_URL;
+const BASE_RELAY_URL = import.meta.env.VITE_MAP_DADDY_RELAY_URL || import.meta.env.NEXT_PUBLIC_MAP_DADDY_RELAY_URL || (import.meta.env.PROD ? '' : 'ws://localhost:8080');
+
+const API_URL = localStorage.getItem('md_api_url') || BASE_API_URL;
+const RELAY_URL = localStorage.getItem('md_relay_url') || BASE_RELAY_URL;
 const PUBLIC_BACKEND_URL = import.meta.env.VITE_MAP_DADDY_PUBLIC_BACKEND_URL || import.meta.env.NEXT_PUBLIC_MAP_DADDY_PUBLIC_BACKEND_URL || API_URL;
 const GRID_SIZE = 24;
 
@@ -628,6 +631,30 @@ function LibraryPage({ scene, setActivePage, selectedMapping, handleMediaUpload,
 }
 
 function OutputSettingsPage({ scene, startSession, saveSceneLocally }) {
+  const [localApiUrl, setLocalApiUrl] = useState(() => localStorage.getItem('md_api_url') || '');
+  const [localRelayUrl, setLocalRelayUrl] = useState(() => localStorage.getItem('md_relay_url') || '');
+  
+  const handleSaveOverrides = () => {
+    if (localApiUrl.trim()) {
+      localStorage.setItem('md_api_url', localApiUrl.trim());
+    } else {
+      localStorage.removeItem('md_api_url');
+    }
+    
+    if (localRelayUrl.trim()) {
+      localStorage.setItem('md_relay_url', localRelayUrl.trim());
+    } else {
+      localStorage.removeItem('md_relay_url');
+    }
+    window.location.reload();
+  };
+
+  const handleResetOverrides = () => {
+    localStorage.removeItem('md_api_url');
+    localStorage.removeItem('md_relay_url');
+    window.location.reload();
+  };
+
   return (
     <main className="min-h-screen bg-[#0a0b10] pl-[280px] pt-12 max-md:pl-0">
       <div className="grid-bg min-h-[calc(100vh-48px)] p-6">
@@ -651,6 +678,52 @@ function OutputSettingsPage({ scene, startSession, saveSceneLocally }) {
             <div className="bg-black/40 p-4"><span className="mono text-[10px] uppercase text-slate-500">Render Output FPS</span><div className="mono mt-1 text-5xl font-bold text-lime-300">59.94</div></div>
             <div className="mt-3 grid grid-cols-2 gap-3"><Metric label="GPU Load" value="84%" tone="cyan" /><Metric label="CPU Load" value="32%" /></div>
           </section>
+          
+          <section className="glass-panel col-span-12 rounded p-5 lg:col-span-12">
+            <h2 className="mono mb-4 border-b border-white/10 pb-3 text-xs uppercase tracking-wider text-slate-200">Advanced Network Overrides (Cloudflare Tunnels)</h2>
+            <p className="text-xs text-slate-400 mb-4 font-medium">
+              Running a Cloudflare Tunnel for your local setup? Paste your tunnel URLs below to direct this hosted controller (`thatscrazzyy.github.io`) to your local backend and relay.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="mono mb-2 block text-[10px] uppercase text-slate-500">API/Backend Endpoint (HTTPS)</label>
+                <input 
+                  type="text" 
+                  value={localApiUrl} 
+                  onChange={(e) => setLocalApiUrl(e.target.value)} 
+                  placeholder="https://your-backend-tunnel.trycloudflare.com" 
+                  className="w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/50" 
+                />
+              </div>
+              <div>
+                <label className="mono mb-2 block text-[10px] uppercase text-slate-500">WebSocket Relay URL (WSS)</label>
+                <input 
+                  type="text" 
+                  value={localRelayUrl} 
+                  onChange={(e) => setLocalRelayUrl(e.target.value)} 
+                  placeholder="wss://your-relay-tunnel.trycloudflare.com" 
+                  className="w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/50" 
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button 
+                onClick={handleSaveOverrides} 
+                className="mono rounded bg-cyan-100 px-4 py-2 text-xs uppercase tracking-wider text-slate-950 font-bold transition hover:bg-cyan-200"
+              >
+                Apply Overrides & Reload
+              </button>
+              {(localStorage.getItem('md_api_url') || localStorage.getItem('md_relay_url')) && (
+                <button 
+                  onClick={handleResetOverrides} 
+                  className="mono rounded border border-red-300/30 bg-red-400/10 px-4 py-2 text-xs uppercase tracking-wider text-red-200 transition hover:bg-red-500/20"
+                >
+                  Reset to Defaults
+                </button>
+              )}
+            </div>
+          </section>
+
           <ConfigCard icon={SlidersHorizontal} title="Edge Blending" body="Manage overlap zones and gamma gradients between adjacent projection fields." tone="cyan" />
           <ConfigCard icon={Grid3X3} title="Geometry & Keystone" body="Launch the warp grid editor for output correction." tone="magenta" />
           <ConfigCard icon={Palette} title="Color Profile Sync" body="Calibrate receiver output against the active projector profile." tone="lime" />
