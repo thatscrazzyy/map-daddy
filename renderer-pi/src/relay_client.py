@@ -98,7 +98,11 @@ class RelayClient:
                 on_close=on_close
             )
 
-            self.ws.run_forever()
+            import ssl
+            sslopt = {}
+            if self.url.startswith("wss://"):
+                sslopt = {"cert_reqs": ssl.CERT_NONE}
+            self.ws.run_forever(sslopt=sslopt)
 
             if self.running:
                 time.sleep(3)
