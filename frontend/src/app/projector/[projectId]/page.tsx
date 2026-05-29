@@ -4,6 +4,7 @@ import { ProjectorRenderer } from '../../../components/projector/ProjectorRender
 import { getProject } from '../../../lib/projects/projectRepository';
 import type { ProjectState } from '../../../lib/projects/types';
 import { ProjectRealtimeClient } from '../../../lib/realtime/realtimeClient';
+import { sceneToProjectState } from '../../../lib/rendering/sceneAdapter';
 
 export function ProjectorPage({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<ProjectState | null>(null);
@@ -15,11 +16,11 @@ export function ProjectorPage({ projectId }: { projectId: string }) {
   useEffect(() => {
     let active = true;
     getProject(projectId).then((loaded) => {
-      if (active) setProject(loaded);
+      if (active) setProject(sceneToProjectState(loaded));
     });
     const client = new ProjectRealtimeClient(projectId, 'projector', {
       onStatus: setStatus,
-      onProject: (next) => setProject(next),
+      onProject: (next) => setProject(sceneToProjectState(next)),
       onError: setStatus
     });
     client.connect();

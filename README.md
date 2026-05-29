@@ -108,7 +108,30 @@ Open:
 http://localhost:5173/dashboard
 ```
 
-Create a project, add/upload media, add or select a surface, then open the projector link in another tab or device.
+Create a project, add/upload media, add or select a surface, then copy or open the projector link in another tab or projector-connected device.
+
+## Primary Product Flow
+
+1. Start the backend, relay, and frontend.
+2. Open the dashboard at `http://localhost:5173/dashboard`.
+3. Create or open a project.
+4. In the editor, click **Copy Projector Link** or **Projector**.
+5. Open `/projector/:projectId` on the display connected to your projector.
+6. Click **Fullscreen** on the projector page.
+7. Edit from the browser editor and watch the projector page update live.
+
+## Local Testing Checklist
+
+- Start backend in terminal 1.
+- Start relay in terminal 2.
+- Start frontend in terminal 3.
+- Open the editor in one browser tab.
+- Open the projector page in another browser tab.
+- Upload an image and create or select a surface.
+- Drag a surface corner and verify the projector updates live.
+- Drag the whole surface and verify the projector updates live.
+- Refresh the projector page and verify the latest saved project loads.
+- Open a second projector tab and verify both projector clients update.
 
 ## Local Environment
 
@@ -229,6 +252,26 @@ See:
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/relay-setup.md](docs/relay-setup.md)
 - [docs/pi-setup.md](docs/pi-setup.md)
+
+## Optional Pro Receiver
+
+The default Map Daddy flow is browser editor to browser projector. The Python/Raspberry Pi receiver remains in the repo as an optional Pro Receiver for installations that need a dedicated native output app.
+
+Run from source:
+
+```bash
+cd renderer-pi
+python3 mapdaddy_receiver.py --relay wss://relay-url.com --code MD-123456 --session-secret generated-secret
+python3 mapdaddy_receiver.py --server http://localhost:8000
+python3 mapdaddy_receiver.py --windowed
+```
+
+Release artifacts can still be built with PyInstaller:
+
+- `MapDaddy-Receiver-Windows-x64.exe`
+- `MapDaddy-Receiver-Linux-x64`
+- `MapDaddy-Receiver-Linux-arm64`
+- `MapDaddy-Receiver-RaspberryPi-arm64`
 
 ## Security And Privacy
 

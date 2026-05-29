@@ -21,6 +21,8 @@ export class ProjectRealtimeClient {
   private shouldReconnect = true;
   private latestProject: ProjectState | null = null;
   private lastSentAt = 0;
+  private trailingSendTimer = 0;
+  private pendingProject: ProjectState | null = null;
 
   constructor(projectId: string, role: Role, handlers: RealtimeHandlers = {}) {
     this.projectId = projectId;
@@ -79,7 +81,17 @@ export class ProjectRealtimeClient {
     this.latestProject = project;
     if (this.role !== 'editor') return;
     const now = Date.now();
-    if (!force && now - this.lastSentAt < 60) return;
+    const elapsed = now - this.lastSentAt;
+    if (!force && elapsed < 80) {
+      this.pendingProject = project;
+      window.clearTimeout(this.trailingSendTimer);
+      this.trailingSendTimer = window.setTimeout(() => {
+        const pending = this.pendingProject;
+        this.pendingProject = null;
+        if (pending) this.sendProject(pending, true);
+      }, 80 - elapsed);
+      return;
+    }
     this.lastSentAt = now;
     if (this.ws?.readyState === WebSocket.OPEN) {
       // The relay keeps the latest state in memory and fans it out to every projector in the project room.
@@ -90,6 +102,7 @@ export class ProjectRealtimeClient {
   disconnect() {
     this.shouldReconnect = false;
     window.clearTimeout(this.reconnectTimer);
+    window.clearTimeout(this.trailingSendTimer);
     this.ws?.close();
     this.ws = null;
   }

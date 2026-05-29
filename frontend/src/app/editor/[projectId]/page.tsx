@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, Home, Save } from 'lucide-react';
+import { Check, Copy, ExternalLink, Home, Save } from 'lucide-react';
 import { EditorCanvas } from '../../../components/editor/EditorCanvas';
 import { MediaPanel } from '../../../components/editor/MediaPanel';
 import { ProjectorStatus } from '../../../components/editor/ProjectorStatus';
@@ -58,6 +58,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [projectorCount, setProjectorCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState('');
+  const [copiedProjectorLink, setCopiedProjectorLink] = useState(false);
   const realtimeRef = useRef<ProjectRealtimeClient | null>(null);
   const saveTimerRef = useRef(0);
 
@@ -83,7 +84,14 @@ export function EditorPage({ projectId }: { projectId: string }) {
     };
   }, [projectId]);
 
-  const projectorUrl = useMemo(() => `${window.location.origin}/projector/${projectId}`, [projectId]);
+  const projectorPath = useMemo(() => `/projector/${projectId}`, [projectId]);
+  const projectorUrl = useMemo(() => `${window.location.origin}${projectorPath}`, [projectorPath]);
+
+  const copyProjectorLink = async () => {
+    await navigator.clipboard.writeText(projectorPath);
+    setCopiedProjectorLink(true);
+    window.setTimeout(() => setCopiedProjectorLink(false), 1400);
+  };
 
   const commitProject = (updater: (project: ProjectState) => ProjectState) => {
     setProject((current) => {
@@ -181,6 +189,9 @@ export function EditorPage({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-3">
           {saveStatus && <span className="mono text-xs uppercase text-cyan-200"><Save size={13} className="mr-1 inline" />{saveStatus}</span>}
           <ProjectorStatus status={syncStatus} projectorCount={projectorCount} />
+          <button className="inline-flex h-9 items-center gap-2 rounded border border-white/15 bg-white/[0.04] px-3 text-sm hover:border-cyan-300/50" onClick={copyProjectorLink}>
+            {copiedProjectorLink ? <Check size={15} /> : <Copy size={15} />} {copiedProjectorLink ? 'Copied' : 'Copy Projector Link'}
+          </button>
           <a className="inline-flex h-9 items-center gap-2 rounded border border-white/15 bg-white/[0.04] px-3 text-sm hover:border-cyan-300/50" href={projectorUrl} target="_blank" rel="noreferrer">
             <ExternalLink size={15} /> Projector
           </a>
