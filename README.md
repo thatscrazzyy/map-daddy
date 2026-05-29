@@ -4,30 +4,6 @@ Map Daddy is an open-source, web-first projection mapping app. It lets you open 
 
 The current MVP focuses on images, quad surfaces, browser-to-browser realtime sync, and a clean project state model that can later be backed by hosted storage such as Cloudflare, Supabase, Firebase, or S3.
 
-## Built With AI Agents
-
-Map Daddy was developed using a multi-agent workflow:
-
-- Product Manager Agent
-  - Requirements
-  - Feature prioritization
-  - Ticket generation
-
-- Architect Agent
-  - System design
-  - Refactoring plans
-  - Technical specifications
-
-- Engineer Agent
-  - Implementation
-  - Bug fixes
-  - Testing support
-
-- QA Agent
-  - Test plans
-  - Edge case validation
-  - UI verification
-
 ## Features
 
 - Browser dashboard for creating and opening projects.
@@ -317,6 +293,30 @@ Contributions are welcome. Start with focused issues or pull requests that impro
 - Documentation and test coverage.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+## Built With AI Agents
+
+Map Daddy was developed using a multi-agent workflow:
+
+- Product Manager Agent
+  - Requirements
+  - Feature prioritization
+  - Ticket generation
+
+- Architect Agent
+  - System design
+  - Refactoring plans
+  - Technical specifications
+
+- Engineer Agent
+  - Implementation
+  - Bug fixes
+  - Testing support
+
+- QA Agent
+  - Test plans
+  - Edge case validation
+  - UI verification
 
 ## License
 
