@@ -1,6 +1,11 @@
 # Map Daddy Relay Server
 
-A lightweight HTTP/WebSocket relay that connects hosted Map Daddy controllers to receivers with protected pairing sessions.
+A lightweight HTTP/WebSocket relay for Map Daddy.
+
+It supports two protocols:
+
+- Project rooms for the browser editor and browser projector workflow.
+- Protected pairing sessions for the legacy Python receiver workflow.
 
 The relay passes JSON only. It does not store, upload, or proxy media files.
 
@@ -25,6 +30,42 @@ PUBLIC_RELAY_URL=wss://relay.mapdaddy.com PORT=8080 make start
 - `SESSION_CLEANUP_INTERVAL_MS`: cleanup interval, default 5 minutes.
 
 ## API
+
+Health:
+
+```bash
+curl http://localhost:8080/health
+```
+
+## Browser Project-Room Protocol
+
+Editor join:
+
+```json
+{ "type": "project:join", "role": "editor", "projectId": "project_123" }
+```
+
+Projector join:
+
+```json
+{ "type": "project:join", "role": "projector", "projectId": "project_123" }
+```
+
+Project update from editor:
+
+```json
+{ "type": "project:update", "projectId": "project_123", "project": {} }
+```
+
+Presence update from relay:
+
+```json
+{ "type": "project:presence", "projectId": "project_123", "editorCount": 1, "projectorCount": 2 }
+```
+
+The relay broadcasts each editor update to every projector joined to the same project room. A projector receives the latest in-memory project update when it reconnects.
+
+## Legacy Pairing Session API
 
 Create a session:
 
@@ -51,13 +92,7 @@ Response:
 }
 ```
 
-Health:
-
-```bash
-curl http://localhost:8080/health
-```
-
-## Protocol
+## Legacy Pairing Session Protocol
 
 Renderer join:
 
