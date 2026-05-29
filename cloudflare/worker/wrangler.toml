@@ -7,11 +7,11 @@ CORS_ORIGINS = "*"
 
 [[kv_namespaces]]
 binding = "SCENES"
-id = "04c4ce4f1f2a4fa0ba54d78268a16b4f"
+id = "replace_with_your_kv_namespace_id"
 
 [[r2_buckets]]
 binding = "MEDIA"
-bucket_name = "map-daddy-media"
+bucket_name = "replace_with_your_r2_bucket_name"
 
 [[durable_objects.bindings]]
 name = "ROOMS"

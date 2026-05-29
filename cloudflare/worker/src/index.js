@@ -1,4 +1,5 @@
 const SCENE_KEY = 'current_scene';
+const PROJECT_PREFIX = 'project:';
 const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const MAX_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -51,7 +52,7 @@ function corsHeaders(request, env) {
       : configured.split(',')[0].trim();
   return {
     'Access-Control-Allow-Origin': allowOrigin || '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization'
   };
 }
@@ -119,6 +120,80 @@ function safeUploadName(name) {
   const stem = (dot > 0 ? cleaned.slice(0, dot) : cleaned).slice(0, 80) || 'upload';
   const ext = dot > 0 ? cleaned.slice(dot, dot + 16) : '';
   return `${Date.now()}_${stem}${ext}`;
+}
+
+function generateProjectId() {
+  const bytes = new Uint8Array(9);
+  crypto.getRandomValues(bytes);
+  const token = [...bytes].map((byte) => byte.toString(36).padStart(2, '0')).join('').slice(0, 12);
+  return `project_${token}`;
+}
+
+function safeProjectId(projectId) {
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(projectId || '')) return null;
+  return projectId;
+}
+
+function defaultProject(name = 'Untitled Project', id = generateProjectId()) {
+  return {
+    id,
+    name: name || 'Untitled Project',
+    canvas: { width: 1920, height: 1080, backgroundColor: '#000000' },
+    media: [],
+    surfaces: [],
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function normalizeProject(project = {}) {
+  const id = safeProjectId(project.id) || generateProjectId();
+  const canvas = project.canvas || {};
+  return {
+    id,
+    name: project.name || 'Untitled Project',
+    canvas: {
+      width: Number(canvas.width || 1920),
+      height: Number(canvas.height || 1080),
+      backgroundColor: canvas.backgroundColor || '#000000'
+    },
+    media: (project.media || []).map((item, index) => ({
+      id: item.id || `media_${index + 1}`,
+      type: item.type === 'video' ? 'video' : 'image',
+      url: item.url || '',
+      name: item.name || item.id || `Media ${index + 1}`
+    })),
+    surfaces: (project.surfaces || []).map((surface, index) => ({
+      id: surface.id || `surface_${index + 1}`,
+      name: surface.name || `Surface ${index + 1}`,
+      mediaId: surface.mediaId || '',
+      visible: surface.visible !== false,
+      opacity: Number(surface.opacity ?? 1),
+      blendMode: surface.blendMode || 'source-over',
+      sourceRect: {
+        x: Number(surface.sourceRect?.x || 0),
+        y: Number(surface.sourceRect?.y || 0),
+        width: Number(surface.sourceRect?.width || canvas.width || 1920),
+        height: Number(surface.sourceRect?.height || canvas.height || 1080)
+      },
+      destinationQuad: (surface.destinationQuad?.length === 4 ? surface.destinationQuad : [
+        { x: 480, y: 270 },
+        { x: 1440, y: 270 },
+        { x: 1440, y: 810 },
+        { x: 480, y: 810 }
+      ]).map((point) => ({ x: Number(point.x || 0), y: Number(point.y || 0) }))
+    })),
+    updatedAt: project.updatedAt || new Date().toISOString()
+  };
+}
+
+function projectSummary(project) {
+  return {
+    id: project.id,
+    name: project.name,
+    updatedAt: project.updatedAt,
+    surfaceCount: project.surfaces?.length || 0,
+    mediaCount: project.media?.length || 0
+  };
 }
 
 function contentTypeForKey(key) {
@@ -209,6 +284,41 @@ async function handleScenePost(request, env) {
   return jsonResponse(request, env, { status: 'success' });
 }
 
+async function handleProjectsList(request, env) {
+  const listing = await env.SCENES.list({ prefix: PROJECT_PREFIX });
+  const projects = [];
+  for (const key of listing.keys) {
+    const stored = await env.SCENES.get(key.name, 'json');
+    if (stored) projects.push(projectSummary(normalizeProject(stored)));
+  }
+  projects.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  return jsonResponse(request, env, projects);
+}
+
+async function handleProjectCreate(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const project = normalizeProject(defaultProject(body.name || 'Untitled Project'));
+  await env.SCENES.put(`${PROJECT_PREFIX}${project.id}`, JSON.stringify(project));
+  return jsonResponse(request, env, project, 201);
+}
+
+async function handleProjectGet(request, env, projectId) {
+  const id = safeProjectId(projectId);
+  if (!id) return jsonResponse(request, env, { detail: 'Invalid project id' }, 400);
+  const stored = await env.SCENES.get(`${PROJECT_PREFIX}${id}`, 'json');
+  if (!stored) return jsonResponse(request, env, { detail: 'Project not found' }, 404);
+  return jsonResponse(request, env, normalizeProject(stored));
+}
+
+async function handleProjectPut(request, env, projectId) {
+  const id = safeProjectId(projectId);
+  if (!id) return jsonResponse(request, env, { detail: 'Invalid project id' }, 400);
+  const body = await request.json();
+  const project = normalizeProject({ ...body, id, updatedAt: new Date().toISOString() });
+  await env.SCENES.put(`${PROJECT_PREFIX}${id}`, JSON.stringify(project));
+  return jsonResponse(request, env, project);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -231,13 +341,24 @@ export default {
     if (url.pathname === '/api/media/upload' && request.method === 'POST') {
       return handleMediaUpload(request, env);
     }
+    if (url.pathname === '/api/projects' && request.method === 'GET') {
+      return handleProjectsList(request, env);
+    }
+    if (url.pathname === '/api/projects' && request.method === 'POST') {
+      return handleProjectCreate(request, env);
+    }
+    if (url.pathname.startsWith('/api/projects/') && request.method === 'GET') {
+      return handleProjectGet(request, env, decodeURIComponent(url.pathname.slice('/api/projects/'.length)));
+    }
+    if (url.pathname.startsWith('/api/projects/') && request.method === 'PUT') {
+      return handleProjectPut(request, env, decodeURIComponent(url.pathname.slice('/api/projects/'.length)));
+    }
     if (url.pathname.startsWith('/media/') && request.method === 'GET') {
       return handleMediaGet(request, env, decodeURIComponent(url.pathname.slice('/media/'.length)));
     }
     if (url.pathname === '/ws') {
       const code = url.searchParams.get('code');
-      if (!code) return textResponse(request, env, 'Missing code', 400);
-      return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(request);
+      return env.ROOMS.get(env.ROOMS.idFromName(code || 'project-realtime')).fetch(request);
     }
     return textResponse(request, env, 'Not found', 404);
   }
@@ -249,6 +370,7 @@ export class ProjectionRoom {
     this.env = env;
     this.controller = null;
     this.renderer = null;
+    this.projectRooms = new Map();
   }
 
   async fetch(request) {
@@ -277,6 +399,47 @@ export class ProjectionRoom {
     } catch (_) {
       // Closed sockets throw; status updates are best effort.
     }
+  }
+
+  getProjectRoom(projectId) {
+    if (!this.projectRooms.has(projectId)) {
+      this.projectRooms.set(projectId, {
+        editors: new Set(),
+        projectors: new Set(),
+        latestProject: null
+      });
+    }
+    return this.projectRooms.get(projectId);
+  }
+
+  projectStatus(projectId, room) {
+    return {
+      type: 'project:presence',
+      projectId,
+      editorCount: room.editors.size,
+      projectorCount: room.projectors.size
+    };
+  }
+
+  broadcastProject(projectId, payload) {
+    const room = this.projectRooms.get(projectId);
+    if (!room) return;
+    for (const socket of [...room.editors, ...room.projectors]) {
+      this.safeSend(socket, payload);
+    }
+  }
+
+  leaveProjectRoom(socket, projectId, projectRole) {
+    if (!projectId || !projectRole) return;
+    const room = this.projectRooms.get(projectId);
+    if (!room) return;
+    if (projectRole === 'editor') room.editors.delete(socket);
+    if (projectRole === 'projector') room.projectors.delete(socket);
+    if (room.editors.size === 0 && room.projectors.size === 0 && !room.latestProject) {
+      this.projectRooms.delete(projectId);
+      return;
+    }
+    this.broadcastProject(projectId, this.projectStatus(projectId, room));
   }
 
   async sessionStatus(code) {
@@ -311,6 +474,8 @@ export class ProjectionRoom {
   handleSocket(socket) {
     let role = null;
     let code = null;
+    let projectId = null;
+    let projectRole = null;
 
     socket.addEventListener('message', async (event) => {
       let data;
@@ -318,6 +483,44 @@ export class ProjectionRoom {
         data = JSON.parse(event.data);
       } catch (_) {
         this.safeSend(socket, { type: 'error', message: 'Malformed JSON message' });
+        return;
+      }
+
+      if (data.type === 'project:join') {
+        const nextProjectId = typeof data.projectId === 'string' ? data.projectId.trim() : '';
+        const nextRole = data.role === 'projector' ? 'projector' : data.role === 'editor' ? 'editor' : '';
+        if (!nextProjectId || !nextRole) {
+          this.safeSend(socket, { type: 'error', message: 'project:join requires projectId and role' });
+          return;
+        }
+        this.leaveProjectRoom(socket, projectId, projectRole);
+        projectId = nextProjectId;
+        projectRole = nextRole;
+        const room = this.getProjectRoom(projectId);
+        room[projectRole === 'editor' ? 'editors' : 'projectors'].add(socket);
+        this.safeSend(socket, { type: 'project:joined', projectId, role: projectRole });
+        this.broadcastProject(projectId, this.projectStatus(projectId, room));
+        if (projectRole === 'projector' && room.latestProject) {
+          this.safeSend(socket, { type: 'project:update', projectId, project: room.latestProject });
+        }
+        return;
+      }
+
+      if (data.type === 'project:update') {
+        if (!projectId || projectRole !== 'editor') {
+          this.safeSend(socket, { type: 'error', message: 'Only a joined editor can send project:update' });
+          return;
+        }
+        if (!data.project || typeof data.project !== 'object') {
+          this.safeSend(socket, { type: 'error', message: 'project:update requires a project object' });
+          return;
+        }
+        const room = this.getProjectRoom(projectId);
+        room.latestProject = data.project;
+        for (const projector of [...room.projectors]) {
+          this.safeSend(projector, { type: 'project:update', projectId, project: data.project });
+        }
+        this.safeSend(socket, this.projectStatus(projectId, room));
         return;
       }
 
@@ -380,6 +583,7 @@ export class ProjectionRoom {
     });
 
     socket.addEventListener('close', async () => {
+      this.leaveProjectRoom(socket, projectId, projectRole);
       if (role === 'controller' && this.controller === socket) this.controller = null;
       if (role === 'renderer' && this.renderer === socket) this.renderer = null;
       if (code) {

@@ -13,6 +13,7 @@ import shutil
 import re
 import time
 from collections import defaultdict
+from uuid import uuid4
 
 app = FastAPI(title="Map Daddy API")
 
@@ -113,6 +114,90 @@ def _safe_upload_name(filename: str):
     return f"{int(datetime.now(timezone.utc).timestamp())}_{stem}{suffix}"
 
 SCENE_VERSION = "0.3.0"
+
+def _safe_project_id(project_id: str):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", project_id or ""):
+        raise HTTPException(status_code=400, detail="Invalid project id")
+    return project_id
+
+def _project_file(project_id: str):
+    return os.path.join(PROJECTS_DIR, f"{_safe_project_id(project_id)}.project.json")
+
+def _default_project(name: str = "Untitled Project", project_id = None):
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": project_id or f"project_{uuid4().hex[:12]}",
+        "name": name or "Untitled Project",
+        "canvas": {
+            "width": 1920,
+            "height": 1080,
+            "backgroundColor": "#000000"
+        },
+        "media": [],
+        "surfaces": [],
+        "updatedAt": now
+    }
+
+def _normalize_project(project: dict):
+    now = datetime.now(timezone.utc).isoformat()
+    project_id = project.get("id") or f"project_{uuid4().hex[:12]}"
+    canvas = project.get("canvas") or {}
+    normalized = {
+        "id": _safe_project_id(project_id),
+        "name": project.get("name") or "Untitled Project",
+        "canvas": {
+            "width": int(canvas.get("width") or 1920),
+            "height": int(canvas.get("height") or 1080),
+            "backgroundColor": canvas.get("backgroundColor") or "#000000"
+        },
+        "media": [],
+        "surfaces": [],
+        "updatedAt": project.get("updatedAt") or now
+    }
+    for index, item in enumerate(project.get("media") or []):
+        normalized["media"].append({
+            "id": item.get("id") or f"media_{index + 1}",
+            "type": "video" if item.get("type") == "video" else "image",
+            "url": item.get("url") or "",
+            "name": item.get("name") or item.get("id") or f"Media {index + 1}"
+        })
+    for index, surface in enumerate(project.get("surfaces") or []):
+        source = surface.get("sourceRect") or {}
+        quad = surface.get("destinationQuad") or []
+        if len(quad) != 4:
+            width = normalized["canvas"]["width"]
+            height = normalized["canvas"]["height"]
+            quad = [
+                {"x": round(width * 0.25), "y": round(height * 0.25)},
+                {"x": round(width * 0.75), "y": round(height * 0.25)},
+                {"x": round(width * 0.75), "y": round(height * 0.75)},
+                {"x": round(width * 0.25), "y": round(height * 0.75)},
+            ]
+        normalized["surfaces"].append({
+            "id": surface.get("id") or f"surface_{index + 1}",
+            "name": surface.get("name") or f"Surface {index + 1}",
+            "mediaId": surface.get("mediaId") or "",
+            "visible": surface.get("visible", True),
+            "opacity": float(surface.get("opacity", 1)),
+            "blendMode": surface.get("blendMode") or "source-over",
+            "sourceRect": {
+                "x": float(source.get("x", 0)),
+                "y": float(source.get("y", 0)),
+                "width": float(source.get("width") or normalized["canvas"]["width"]),
+                "height": float(source.get("height") or normalized["canvas"]["height"]),
+            },
+            "destinationQuad": [{"x": float(point.get("x", 0)), "y": float(point.get("y", 0))} for point in quad[:4]]
+        })
+    return normalized
+
+def _project_summary(project: dict):
+    return {
+        "id": project.get("id"),
+        "name": project.get("name"),
+        "updatedAt": project.get("updatedAt"),
+        "surfaceCount": len(project.get("surfaces") or []),
+        "mediaCount": len(project.get("media") or [])
+    }
 
 def _default_vertices(shape_type, width, height, inset=0.2):
     if shape_type == "triangle":
@@ -260,6 +345,48 @@ def save_current_scene(scene: dict):
     with open(SCENE_FILE, "w") as f:
         json.dump(scene, f, indent=2)
     return {"status": "success"}
+
+@app.get("/api/projects")
+def list_projects():
+    projects = []
+    for path in Path(PROJECTS_DIR).glob("*.project.json"):
+        try:
+            with open(path, "r") as f:
+                projects.append(_project_summary(_normalize_project(json.load(f))))
+        except Exception as e:
+            print(f"Warning: Failed to read project {path}: {e}")
+    projects.sort(key=lambda item: item.get("updatedAt") or "", reverse=True)
+    return projects
+
+@app.post("/api/projects")
+async def create_project(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    project = _default_project((body or {}).get("name") or "Untitled Project")
+    project = _normalize_project(project)
+    with open(_project_file(project["id"]), "w") as f:
+        json.dump(project, f, indent=2)
+    return project
+
+@app.get("/api/projects/{project_id}")
+def get_project(project_id: str):
+    path = _project_file(project_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Project not found")
+    with open(path, "r") as f:
+        return _normalize_project(json.load(f))
+
+@app.put("/api/projects/{project_id}")
+def save_project(project_id: str, project: dict):
+    _safe_project_id(project_id)
+    project["id"] = project_id
+    project["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    normalized = _normalize_project(project)
+    with open(_project_file(project_id), "w") as f:
+        json.dump(normalized, f, indent=2)
+    return normalized
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024 # 50MB
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".mp4", ".mov", ".mkv", ".avi", ".webm"}

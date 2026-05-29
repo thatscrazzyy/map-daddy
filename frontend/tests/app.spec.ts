@@ -1,71 +1,35 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Map Daddy Frontend E2E', () => {
-  test('App loads successfully and shows dashboard', async ({ page }) => {
-    await page.goto('/');
-    
-    // Check title
-    await expect(page.locator('text=MAP DADDY v0.3')).toBeVisible();
-    
-    // Check dashboard text
-    await expect(page.locator('text=Project Dashboard')).toBeVisible();
+test.describe('Map Daddy Browser Projection MVP', () => {
+  test('dashboard loads and can create a project', async ({ page }) => {
+    await page.goto('/dashboard');
+    await expect(page.getByText('MAP DADDY')).toBeVisible();
+    await expect(page.getByText('Create Project')).toBeVisible();
+
+    await page.getByRole('button', { name: /Create and Open/i }).click();
+    await expect(page).toHaveURL(/\/editor\/project_/);
+    await expect(page.getByText('Editor Canvas')).toBeVisible();
   });
 
-  test('Start Projection Session handles empty backend/relay gracefully', async ({ page }) => {
-    await page.goto('/');
-    
-    // Click Start Session
-    const startButton = page.locator('button', { hasText: 'Start Session' });
-    await startButton.click();
-    
-    // It should eventually show a session error or become a session
-    // Depending on backend connection (in CI without backend it shows error)
-    await page.waitForTimeout(1000);
-    const sessionError = page.locator('text=Could not start a projection session');
-    const sessionStarted = page.locator('text=Live Status');
-    
-    const hasError = await sessionError.isVisible();
-    const hasStarted = await sessionStarted.isVisible();
-    
-    expect(hasError || hasStarted).toBeTruthy();
+  test('editor can create a surface', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: /Create and Open/i }).click();
+    await page.getByRole('button', { name: /Add/i }).click();
+
+    await expect(page.getByRole('button', { name: /Surface 1/i })).toBeVisible();
+    await expect(page.getByText('Opacity')).toBeVisible();
   });
 
-  test('Navigation to Workspace and Settings', async ({ page }) => {
-    await page.goto('/');
-    
-    // Go to Workspace
-    await page.locator('nav').locator('text=Workspace').click();
-    await expect(page.locator('text=Project:')).toBeVisible();
-    await expect(page.locator('text=Source / Input')).toBeVisible();
-    await expect(page.locator('text=Destination / Output')).toBeVisible();
+  test('projector route loads latest saved project', async ({ page, context }) => {
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: /Create and Open/i }).click();
+    await page.getByRole('button', { name: /Add/i }).click();
+    await expect(page).toHaveURL(/\/editor\/(.+)/);
+    const projectId = page.url().split('/editor/')[1];
 
-    // Go to Library
-    await page.locator('nav').locator('text=Library').click();
-    await expect(page.locator('text=Asset Library')).toBeVisible();
-
-    // Go to Settings
-    await page.locator('nav').locator('text=Settings').click();
-    await expect(page.locator('text=Output Settings')).toBeVisible();
-  });
-
-  test('Create a mapping', async ({ page }) => {
-    await page.goto('/');
-    
-    await page.locator('nav').locator('text=Workspace').click();
-    
-    // The layers list should initially show at least one default layer or be empty
-    const addQuadBtn = page.locator('button[title="Add quad"]');
-    if (await addQuadBtn.isVisible()) {
-      await addQuadBtn.click();
-      
-      // Wait for it to appear
-      await page.waitForTimeout(500);
-      
-      // We expect a new layer "Quad Mapping" or "Surface"
-      // Looking for the properties panel which only shows when a layer is selected
-      await expect(page.locator('text=Properties Inspector')).toBeVisible();
-      const opacLabel = page.locator('label:has-text("Opacity")');
-      await expect(opacLabel).toBeVisible();
-    }
+    const projector = await context.newPage();
+    await projector.goto(`/projector/${projectId}`);
+    await expect(projector.getByText(/connected|connecting|reconnecting|offline/i)).toBeVisible();
+    await expect(projector.locator('canvas')).toBeVisible();
   });
 });

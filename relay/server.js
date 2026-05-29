@@ -12,6 +12,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const sessions = new Map();
+const projectRooms = new Map();
 const DEFAULT_SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 2 * 60 * 60 * 1000);
 const CLEANUP_INTERVAL_MS = Number(process.env.SESSION_CLEANUP_INTERVAL_MS || 5 * 60 * 1000);
 
@@ -67,6 +68,48 @@ function sessionStatus(code, session) {
     rendererConnected: !!session.renderer && session.renderer.readyState === WebSocket.OPEN,
     expiresAt: new Date(session.expiresAt).toISOString()
   };
+}
+
+function getProjectRoom(projectId) {
+  if (!projectRooms.has(projectId)) {
+    projectRooms.set(projectId, {
+      editors: new Set(),
+      projectors: new Set(),
+      latestProject: null,
+      lastActivity: Date.now()
+    });
+  }
+  return projectRooms.get(projectId);
+}
+
+function projectStatus(projectId, room) {
+  return {
+    type: 'project:presence',
+    projectId,
+    editorCount: room.editors.size,
+    projectorCount: room.projectors.size
+  };
+}
+
+function broadcastProject(projectId, payload) {
+  const room = projectRooms.get(projectId);
+  if (!room) return;
+  for (const client of [...room.editors, ...room.projectors]) {
+    safeSend(client, payload);
+  }
+}
+
+function leaveProjectRoom(ws, projectId, role) {
+  if (!projectId || !role) return;
+  const room = projectRooms.get(projectId);
+  if (!room) return;
+  if (role === 'editor') room.editors.delete(ws);
+  if (role === 'projector') room.projectors.delete(ws);
+  if (room.editors.size === 0 && room.projectors.size === 0 && !room.latestProject) {
+    projectRooms.delete(projectId);
+    return;
+  }
+  broadcastProject(projectId, projectStatus(projectId, room));
 }
 
 function validateJoin(data) {
@@ -152,10 +195,53 @@ app.post('/sessions', (req, res) => {
 wss.on('connection', (ws) => {
   let currentCode = null;
   let currentRole = null;
+  let currentProjectId = null;
+  let currentProjectRole = null;
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
+
+      if (data.type === 'project:join') {
+        const projectId = typeof data.projectId === 'string' ? data.projectId.trim() : '';
+        const role = data.role === 'projector' ? 'projector' : data.role === 'editor' ? 'editor' : '';
+        if (!projectId || !role) {
+          safeSend(ws, { type: 'error', message: 'project:join requires projectId and role' });
+          return;
+        }
+        leaveProjectRoom(ws, currentProjectId, currentProjectRole);
+        const room = getProjectRoom(projectId);
+        currentProjectId = projectId;
+        currentProjectRole = role;
+        room[role === 'editor' ? 'editors' : 'projectors'].add(ws);
+        room.lastActivity = Date.now();
+
+        safeSend(ws, { type: 'project:joined', projectId, role });
+        broadcastProject(projectId, projectStatus(projectId, room));
+        if (role === 'projector' && room.latestProject) {
+          safeSend(ws, { type: 'project:update', projectId, project: room.latestProject });
+        }
+        return;
+      }
+
+      if (data.type === 'project:update') {
+        if (!currentProjectId || currentProjectRole !== 'editor') {
+          safeSend(ws, { type: 'error', message: 'Only a joined editor can send project:update' });
+          return;
+        }
+        if (!data.project || typeof data.project !== 'object') {
+          safeSend(ws, { type: 'error', message: 'project:update requires a project object' });
+          return;
+        }
+        const room = getProjectRoom(currentProjectId);
+        room.latestProject = data.project;
+        room.lastActivity = Date.now();
+        for (const projector of [...room.projectors]) {
+          safeSend(projector, { type: 'project:update', projectId: currentProjectId, project: data.project });
+        }
+        safeSend(ws, projectStatus(currentProjectId, room));
+        return;
+      }
 
       if (data.type === 'join') {
         const validation = validateJoin(data);
@@ -237,6 +323,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    leaveProjectRoom(ws, currentProjectId, currentProjectRole);
     if (currentCode && currentRole) {
       const session = sessions.get(currentCode);
       if (session && session[currentRole] === ws) {
@@ -259,4 +346,4 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-module.exports = { app, server, wss, sessions };
+module.exports = { app, server, wss, sessions, projectRooms };
