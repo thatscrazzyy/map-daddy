@@ -388,6 +388,14 @@ def save_project(project_id: str, project: dict):
         json.dump(normalized, f, indent=2)
     return normalized
 
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: str):
+    path = _project_file(project_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Project not found")
+    os.remove(path)
+    return {"status": "success"}
+
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024 # 50MB
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".mp4", ".mov", ".mkv", ".avi", ".webm"}
 

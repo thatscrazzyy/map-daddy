@@ -32,6 +32,28 @@ def test_save_current_scene():
     assert data.get("output", {}).get("width") == 800
     assert os.path.exists(SCENE_FILE)
 
+def test_project_crud():
+    res_create = client.post("/api/projects", json={"name": "CRUD Project"})
+    assert res_create.status_code == 200
+    project = res_create.json()
+    project_id = project["id"]
+    assert project["name"] == "CRUD Project"
+
+    res_update = client.put(f"/api/projects/{project_id}", json={**project, "name": "Renamed Project"})
+    assert res_update.status_code == 200
+    assert res_update.json()["name"] == "Renamed Project"
+
+    res_list = client.get("/api/projects")
+    assert res_list.status_code == 200
+    assert any(item["id"] == project_id and item["name"] == "Renamed Project" for item in res_list.json())
+
+    res_delete = client.delete(f"/api/projects/{project_id}")
+    assert res_delete.status_code == 200
+    assert res_delete.json() == {"status": "success"}
+
+    res_get_deleted = client.get(f"/api/projects/{project_id}")
+    assert res_get_deleted.status_code == 404
+
 def test_upload_media_invalid():
     # Test uploading a file
     file_content = b"fake image data"

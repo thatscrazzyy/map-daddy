@@ -17,6 +17,20 @@ The current MVP focuses on images, quad surfaces, browser-to-browser realtime sy
 - Cloudflare Worker support for hosted project API, media storage, and realtime rooms.
 - Legacy Python receiver code remains available for Raspberry Pi and desktop receiver experiments.
 
+## Screenshots
+
+Dashboard project management:
+
+![Map Daddy dashboard project list](docs/assets/screenshots/dashboard-projects.png)
+
+Editor surface mapping:
+
+![Map Daddy editor with image surface mapping](docs/assets/screenshots/editor-surface-mapping.png)
+
+Browser projector output:
+
+![Map Daddy browser projector output](docs/assets/screenshots/projector-output.png)
+
 ## Architecture
 
 ```text

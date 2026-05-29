@@ -52,7 +52,7 @@ function corsHeaders(request, env) {
       : configured.split(',')[0].trim();
   return {
     'Access-Control-Allow-Origin': allowOrigin || '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization'
   };
 }
@@ -319,6 +319,16 @@ async function handleProjectPut(request, env, projectId) {
   return jsonResponse(request, env, project);
 }
 
+async function handleProjectDelete(request, env, projectId) {
+  const id = safeProjectId(projectId);
+  if (!id) return jsonResponse(request, env, { detail: 'Invalid project id' }, 400);
+  const key = `${PROJECT_PREFIX}${id}`;
+  const stored = await env.SCENES.get(key);
+  if (!stored) return jsonResponse(request, env, { detail: 'Project not found' }, 404);
+  await env.SCENES.delete(key);
+  return jsonResponse(request, env, { status: 'success' });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -352,6 +362,9 @@ export default {
     }
     if (url.pathname.startsWith('/api/projects/') && request.method === 'PUT') {
       return handleProjectPut(request, env, decodeURIComponent(url.pathname.slice('/api/projects/'.length)));
+    }
+    if (url.pathname.startsWith('/api/projects/') && request.method === 'DELETE') {
+      return handleProjectDelete(request, env, decodeURIComponent(url.pathname.slice('/api/projects/'.length)));
     }
     if (url.pathname.startsWith('/media/') && request.method === 'GET') {
       return handleMediaGet(request, env, decodeURIComponent(url.pathname.slice('/media/'.length)));

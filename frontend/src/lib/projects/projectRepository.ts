@@ -41,6 +41,13 @@ function localSave(project: ProjectState) {
   return normalized;
 }
 
+function localDelete(projectId: string) {
+  localStorage.removeItem(projectKey(projectId));
+  const ids = new Set(JSON.parse(localStorage.getItem(PROJECT_INDEX_KEY) || '[]') as string[]);
+  ids.delete(projectId);
+  localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify([...ids]));
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_URL) throw new Error('No API URL configured');
   const response = await fetch(`${API_URL}${path}`, {
@@ -85,6 +92,22 @@ export async function saveProject(project: ProjectState): Promise<ProjectState> 
     });
   } catch {
     return normalized;
+  }
+}
+
+export async function renameProject(projectId: string, name: string): Promise<ProjectState> {
+  const project = await getProject(projectId);
+  return saveProject({ ...project, name: name.trim() || 'Untitled Project' });
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  localDelete(projectId);
+  try {
+    await requestJson<{ status: string }>(`/api/projects/${encodeURIComponent(projectId)}`, {
+      method: 'DELETE'
+    });
+  } catch {
+    // Local deletion is still useful when the API is unavailable.
   }
 }
 
