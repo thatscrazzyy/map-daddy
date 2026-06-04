@@ -1,4 +1,4 @@
-import { Image, Upload } from 'lucide-react';
+import { Image, Upload, Video } from 'lucide-react';
 import type { ProjectMedia } from '../../lib/projects/types';
 
 export function MediaPanel({
@@ -17,7 +17,7 @@ export function MediaPanel({
         <label className={`inline-flex h-8 items-center gap-2 rounded border border-cyan-300/40 px-3 text-xs text-cyan-100 ${disabled ? 'opacity-50' : 'cursor-pointer hover:bg-cyan-300/10'}`}>
           <Upload size={14} />
           Upload
-          <input disabled={disabled} type="file" accept="image/*" className="hidden" onChange={(event) => {
+          <input disabled={disabled} type="file" accept="image/*,video/*" className="hidden" onChange={(event) => {
             const file = event.currentTarget.files?.[0];
             if (file) onUpload(file);
             event.currentTarget.value = '';
@@ -29,7 +29,7 @@ export function MediaPanel({
         {media.map((item) => (
           <div key={item.id} className="flex items-center gap-3 rounded border border-white/10 bg-black/20 p-2">
             <div className="flex h-9 w-9 items-center justify-center rounded bg-black/40 text-slate-300">
-              <Image size={16} />
+              {item.type === 'video' ? <Video size={16} /> : <Image size={16} />}
             </div>
             <div className="min-w-0">
               <div className="truncate text-sm text-slate-100">{item.name}</div>

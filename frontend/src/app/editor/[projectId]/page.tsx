@@ -9,18 +9,20 @@ import { getProject, saveProject, uploadMedia } from '../../../lib/projects/proj
 import type { MappingSurface, ProjectState } from '../../../lib/projects/types';
 import { ProjectRealtimeClient } from '../../../lib/realtime/realtimeClient';
 
-function imageDimensions(file: File) {
-  return new Promise<{ width: number; height: number }>((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
+function mediaDimensions(file: File): Promise<{ width: number; height: number }> {
+  const objectUrl = URL.createObjectURL(file);
+  if (file.type.startsWith('video/')) {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.onloadedmetadata = () => { URL.revokeObjectURL(objectUrl); resolve({ width: video.videoWidth || 1920, height: video.videoHeight || 1080 }); };
+      video.onerror = () => { URL.revokeObjectURL(objectUrl); resolve({ width: 1920, height: 1080 }); };
+      video.src = objectUrl;
+    });
+  }
+  return new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Could not read image dimensions'));
-    };
+    image.onload = () => { URL.revokeObjectURL(objectUrl); resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 }); };
+    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Could not read image dimensions')); };
     image.src = objectUrl;
   });
 }
@@ -61,6 +63,10 @@ export function EditorPage({ projectId }: { projectId: string }) {
   const [copiedProjectorLink, setCopiedProjectorLink] = useState(false);
   const realtimeRef = useRef<ProjectRealtimeClient | null>(null);
   const saveTimerRef = useRef(0);
+  const historyRef = useRef<ProjectState[]>([]);
+  const redoRef = useRef<ProjectState[]>([]);
+  const projectRef = useRef<ProjectState | null>(null);
+  projectRef.current = project;
 
   useEffect(() => {
     let active = true;
@@ -93,9 +99,24 @@ export function EditorPage({ projectId }: { projectId: string }) {
     window.setTimeout(() => setCopiedProjectorLink(false), 1400);
   };
 
+  const applyHistoryState = (state: ProjectState) => {
+    setProject(state);
+    realtimeRef.current?.sendProject(state);
+    window.clearTimeout(saveTimerRef.current);
+    setSaveStatus('Saving...');
+    saveTimerRef.current = window.setTimeout(() => {
+      saveProject(state).then(() => {
+        setSaveStatus('Saved');
+        window.setTimeout(() => setSaveStatus(''), 1200);
+      });
+    }, 450);
+  };
+
   const commitProject = (updater: (project: ProjectState) => ProjectState) => {
     setProject((current) => {
       if (!current) return current;
+      historyRef.current = [...historyRef.current.slice(-49), current];
+      redoRef.current = [];
       const next = { ...updater(current), updatedAt: new Date().toISOString() };
       realtimeRef.current?.sendProject(next);
       window.clearTimeout(saveTimerRef.current);
@@ -108,6 +129,24 @@ export function EditorPage({ projectId }: { projectId: string }) {
       }, 450);
       return next;
     });
+  };
+
+  const undoProject = () => {
+    const prev = historyRef.current[historyRef.current.length - 1];
+    if (!prev) return;
+    const current = projectRef.current;
+    if (current) redoRef.current = [...redoRef.current.slice(-49), current];
+    historyRef.current = historyRef.current.slice(0, -1);
+    applyHistoryState(prev);
+  };
+
+  const redoProject = () => {
+    const next = redoRef.current[redoRef.current.length - 1];
+    if (!next) return;
+    const current = projectRef.current;
+    if (current) historyRef.current = [...historyRef.current.slice(-49), current];
+    redoRef.current = redoRef.current.slice(0, -1);
+    applyHistoryState(next);
   };
 
   const patchSurface = (surfaceId: string, patch: Partial<MappingSurface>) => {
@@ -152,7 +191,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
   };
 
   const handleUpload = async (file: File) => {
-    const dimensions = await imageDimensions(file);
+    const dimensions = await mediaDimensions(file);
     const media = await uploadMedia(file);
     commitProject((current) => {
       const selected = current.surfaces.find((surface) => surface.id === selectedSurfaceId);
@@ -173,6 +212,50 @@ export function EditorPage({ projectId }: { projectId: string }) {
     window.history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
+
+  // Keep a stable ref to the latest callbacks/state for the keyboard handler
+  const keybindRef = useRef({ commitProject, undoProject, redoProject, selectedSurfaceId });
+  keybindRef.current = { commitProject, undoProject, redoProject, selectedSurfaceId };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isInput = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement;
+      if (isInput) return;
+
+      const { commitProject, undoProject, redoProject, selectedSurfaceId } = keybindRef.current;
+
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key === 'z' && !event.shiftKey) { event.preventDefault(); undoProject(); return; }
+        if (event.key === 'y' || (event.key === 'z' && event.shiftKey)) { event.preventDefault(); redoProject(); return; }
+        return;
+      }
+
+      const step = event.shiftKey ? 10 : 1;
+      const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+      const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+      if (!dx && !dy) return;
+
+      event.preventDefault();
+      if (!selectedSurfaceId) return;
+
+      commitProject((current) => ({
+        ...current,
+        surfaces: current.surfaces.map((surface) => {
+          if (surface.id !== selectedSurfaceId) return surface;
+          return {
+            ...surface,
+            destinationQuad: surface.destinationQuad.map((pt) => ({
+              x: Math.max(0, Math.min(current.canvas.width, pt.x + dx)),
+              y: Math.max(0, Math.min(current.canvas.height, pt.y + dy))
+            })) as MappingSurface['destinationQuad']
+          };
+        })
+      }));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (!project) return <div className="flex min-h-screen items-center justify-center bg-[#0b0d12] text-slate-100">Loading project...</div>;
 

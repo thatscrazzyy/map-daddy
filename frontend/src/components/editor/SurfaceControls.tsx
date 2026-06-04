@@ -60,6 +60,23 @@ export function SurfaceControls({
             <span className="mb-1 block text-xs text-slate-400">Opacity</span>
             <input className="range-cyan w-full" type="range" min="0" max="1" step="0.01" value={selected.opacity} onChange={(event) => onPatchSurface(selected.id, { opacity: Number(event.target.value) })} />
           </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-400">Blend Mode</span>
+            <select className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50" value={selected.blendMode} onChange={(event) => onPatchSurface(selected.id, { blendMode: event.target.value })}>
+              <option value="source-over">Normal</option>
+              <option value="screen">Screen</option>
+              <option value="multiply">Multiply</option>
+              <option value="overlay">Overlay</option>
+              <option value="lighten">Lighten</option>
+              <option value="darken">Darken</option>
+              <option value="hard-light">Hard Light</option>
+              <option value="soft-light">Soft Light</option>
+              <option value="color-dodge">Color Dodge</option>
+              <option value="color-burn">Color Burn</option>
+              <option value="difference">Difference</option>
+              <option value="exclusion">Exclusion</option>
+            </select>
+          </label>
           <div className="flex gap-2">
             <button className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded border border-white/10 bg-white/[0.04] text-sm hover:bg-white/[0.08]" onClick={() => onPatchSurface(selected.id, { visible: !selected.visible })}>
               {selected.visible ? <EyeOff size={15} /> : <Eye size={15} />} {selected.visible ? 'Hide' : 'Show'}
