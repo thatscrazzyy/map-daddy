@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, FolderOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { createProject, deleteProject, listProjects, renameProject } from '../../lib/projects/projectRepository';
 import type { ProjectSummary } from '../../lib/projects/types';
+import { APP_VERSION_LABEL } from '../../lib/version';
 
 export function DashboardPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -56,7 +57,10 @@ export function DashboardPage() {
       <header className="border-b border-white/10 bg-[#121620] px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div>
-            <div className="neon-cyan text-2xl font-black">MAP DADDY</div>
+            <div className="flex items-baseline gap-3">
+              <div className="neon-cyan text-2xl font-black">MAP DADDY</div>
+              <span className="mono text-xs uppercase tracking-wider text-slate-500">{APP_VERSION_LABEL}</span>
+            </div>
             <p className="text-sm text-slate-400">Browser controller and browser projector</p>
           </div>
         </div>

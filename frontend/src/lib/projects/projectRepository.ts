@@ -1,4 +1,4 @@
-import { createDefaultProject, normalizeProject } from './defaultProject';
+import { DEFAULT_VIDEO_PLAYBACK_SETTINGS, createDefaultProject, normalizeProject } from './defaultProject';
 import type { ProjectMedia, ProjectState, ProjectSummary } from './types';
 
 const DEV_BACKEND_URL = import.meta.env.PROD ? '' : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000');
@@ -125,22 +125,25 @@ export async function createProject(name: string): Promise<ProjectState> {
 }
 
 export async function uploadMedia(file: File): Promise<ProjectMedia> {
+  const type = file.type.startsWith('video/') ? 'video' : 'image';
   if (API_URL) {
     const body = new FormData();
     body.append('file', file);
     const result = await requestJson<{ url: string; filename: string }>('/api/media/upload', { method: 'POST', body });
     return {
       id: `media_${Date.now().toString(36)}`,
-      type: file.type.startsWith('video/') ? 'video' : 'image',
+      type,
       url: absoluteMediaUrl(result.url),
-      name: file.name
+      name: file.name,
+      ...(type === 'video' ? { videoSettings: { ...DEFAULT_VIDEO_PLAYBACK_SETTINGS } } : {})
     };
   }
 
   return {
     id: `media_${Date.now().toString(36)}`,
-    type: file.type.startsWith('video/') ? 'video' : 'image',
+    type,
     url: URL.createObjectURL(file),
-    name: file.name
+    name: file.name,
+    ...(type === 'video' ? { videoSettings: { ...DEFAULT_VIDEO_PLAYBACK_SETTINGS } } : {})
   };
 }

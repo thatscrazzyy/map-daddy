@@ -6,8 +6,18 @@ import { ProjectorStatus } from '../../../components/editor/ProjectorStatus';
 import { SurfaceControls } from '../../../components/editor/SurfaceControls';
 import { createDefaultSurface } from '../../../lib/projects/defaultProject';
 import { getProject, saveProject, uploadMedia } from '../../../lib/projects/projectRepository';
-import type { MappingSurface, ProjectState } from '../../../lib/projects/types';
+import {
+  centerSurfaceOnCanvas,
+  duplicateSurface,
+  fitSurfaceToCanvas,
+  moveSurfaceBackward,
+  moveSurfaceForward,
+  resetSurfaceRectangle,
+  snapSurfaceToGrid
+} from '../../../lib/projects/surfaceOperations';
+import type { MappingSurface, ProjectMedia, ProjectState } from '../../../lib/projects/types';
 import { ProjectRealtimeClient } from '../../../lib/realtime/realtimeClient';
+import { APP_VERSION_LABEL } from '../../../lib/version';
 
 function mediaDimensions(file: File): Promise<{ width: number; height: number }> {
   const objectUrl = URL.createObjectURL(file);
@@ -156,6 +166,13 @@ export function EditorPage({ projectId }: { projectId: string }) {
     }));
   };
 
+  const patchMedia = (mediaId: string, patch: Partial<ProjectMedia>) => {
+    commitProject((current) => ({
+      ...current,
+      media: current.media.map((item) => item.id === mediaId ? { ...item, ...patch } : item)
+    }));
+  };
+
   const addSurface = () => {
     if (!project) return;
     const surface = createDefaultSurface(project, project.media[0]?.id || '');
@@ -188,6 +205,51 @@ export function EditorPage({ projectId }: { projectId: string }) {
       ...current,
       surfaces: current.surfaces.map((surface) => surface.id === surfaceId ? { ...surface, destinationQuad: quad } : surface)
     }));
+  };
+
+  const updateSurface = (surfaceId: string, updater: (surface: MappingSurface, current: ProjectState) => MappingSurface) => {
+    commitProject((current) => ({
+      ...current,
+      surfaces: current.surfaces.map((surface) => surface.id === surfaceId ? updater(surface, current) : surface)
+    }));
+  };
+
+  const centerSurface = (surfaceId: string) => {
+    updateSurface(surfaceId, (surface, current) => centerSurfaceOnCanvas(surface, current.canvas));
+  };
+
+  const fitSurface = (surfaceId: string) => {
+    updateSurface(surfaceId, (surface, current) => fitSurfaceToCanvas(surface, current.canvas));
+  };
+
+  const resetSurface = (surfaceId: string) => {
+    updateSurface(surfaceId, (surface, current) => resetSurfaceRectangle(surface, current.canvas));
+  };
+
+  const snapSurface = (surfaceId: string) => {
+    updateSurface(surfaceId, (surface) => snapSurfaceToGrid(surface));
+  };
+
+  const duplicateSelectedSurface = (surfaceId: string) => {
+    commitProject((current) => {
+      const selected = current.surfaces.find((surface) => surface.id === surfaceId);
+      if (!selected) return current;
+
+      const duplicate = duplicateSurface(selected, current.surfaces, current.canvas);
+      setSelectedSurfaceId(duplicate.id);
+      const selectedIndex = current.surfaces.findIndex((surface) => surface.id === surfaceId);
+      const surfaces = [...current.surfaces];
+      surfaces.splice(selectedIndex + 1, 0, duplicate);
+      return { ...current, surfaces };
+    });
+  };
+
+  const bringSurfaceForward = (surfaceId: string) => {
+    commitProject((current) => ({ ...current, surfaces: moveSurfaceForward(current.surfaces, surfaceId) }));
+  };
+
+  const sendSurfaceBackward = (surfaceId: string) => {
+    commitProject((current) => ({ ...current, surfaces: moveSurfaceBackward(current.surfaces, surfaceId) }));
   };
 
   const handleUpload = async (file: File) => {
@@ -266,7 +328,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
           <button className="flex h-9 w-9 items-center justify-center rounded border border-white/10 bg-white/[0.04] hover:bg-white/[0.08]" onClick={() => go('/dashboard')} title="Dashboard"><Home size={17} /></button>
           <div>
             <h1 className="text-lg font-bold">{project.name}</h1>
-            <p className="mono text-[10px] uppercase tracking-wider text-slate-500">Editor</p>
+            <p className="mono text-[10px] uppercase tracking-wider text-slate-500">Editor / {APP_VERSION_LABEL}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -293,6 +355,14 @@ export function EditorPage({ projectId }: { projectId: string }) {
           onAddSurface={addSurface}
           onDeleteSurface={deleteSurface}
           onPatchSurface={patchSurface}
+          onPatchMedia={patchMedia}
+          onCenterSurface={centerSurface}
+          onFitSurface={fitSurface}
+          onResetSurface={resetSurface}
+          onDuplicateSurface={duplicateSelectedSurface}
+          onBringForward={bringSurfaceForward}
+          onSendBackward={sendSurfaceBackward}
+          onSnapToGrid={snapSurface}
         />
       </div>
     </main>
