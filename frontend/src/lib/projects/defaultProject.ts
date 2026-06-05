@@ -1,7 +1,29 @@
-import type { MappingSurface, ProjectState } from './types';
+import type { MappingSurface, ProjectState, VideoPlaybackSettings } from './types';
+import { normalizeSourceRect } from './sourceRect';
 
 export function uid(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export const DEFAULT_VIDEO_PLAYBACK_SETTINGS: VideoPlaybackSettings = {
+  loop: true,
+  muted: true,
+  playbackRate: 1,
+  startTime: 0
+};
+
+function finiteNumber(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+export function normalizeVideoPlaybackSettings(settings: Partial<VideoPlaybackSettings> | null | undefined): VideoPlaybackSettings {
+  return {
+    loop: settings?.loop !== false,
+    muted: settings?.muted !== false,
+    playbackRate: Math.max(0.25, Math.min(4, finiteNumber(settings?.playbackRate, DEFAULT_VIDEO_PLAYBACK_SETTINGS.playbackRate))),
+    startTime: Math.max(0, finiteNumber(settings?.startTime, DEFAULT_VIDEO_PLAYBACK_SETTINGS.startTime))
+  };
 }
 
 export function createDefaultSurface(project: ProjectState, mediaId = ''): MappingSurface {
@@ -50,12 +72,16 @@ export function normalizeProject(project: Partial<ProjectState> | null | undefin
       height: Number(canvas.height || 1080),
       backgroundColor: canvas.backgroundColor || '#000000'
     },
-    media: (project?.media || []).map((item, index) => ({
-      id: item.id || uid('media'),
-      type: item.type === 'video' ? 'video' : 'image',
-      url: item.url || '',
-      name: item.name || `Media ${index + 1}`
-    })),
+    media: (project?.media || []).map((item, index) => {
+      const type = item.type === 'video' ? 'video' : 'image';
+      return {
+        id: item.id || uid('media'),
+        type,
+        url: item.url || '',
+        name: item.name || `Media ${index + 1}`,
+        ...(type === 'video' ? { videoSettings: normalizeVideoPlaybackSettings(item.videoSettings) } : {})
+      };
+    }),
     surfaces: (project?.surfaces || []).map((surface, index) => ({
       id: surface.id || uid('surface'),
       name: surface.name || `Surface ${index + 1}`,
@@ -63,12 +89,12 @@ export function normalizeProject(project: Partial<ProjectState> | null | undefin
       visible: surface.visible !== false,
       opacity: Number(surface.opacity ?? 1),
       blendMode: surface.blendMode || 'source-over',
-      sourceRect: {
-        x: Number(surface.sourceRect?.x || 0),
-        y: Number(surface.sourceRect?.y || 0),
-        width: Number(surface.sourceRect?.width || canvas.width || 1920),
-        height: Number(surface.sourceRect?.height || canvas.height || 1080)
-      },
+      sourceRect: normalizeSourceRect({
+        x: surface.sourceRect?.x ?? 0,
+        y: surface.sourceRect?.y ?? 0,
+        width: surface.sourceRect?.width ?? canvas.width ?? 1920,
+        height: surface.sourceRect?.height ?? canvas.height ?? 1080
+      }),
       destinationQuad: (surface.destinationQuad?.length === 4
         ? surface.destinationQuad
         : createDefaultSurface(fallback).destinationQuad) as typeof surface.destinationQuad

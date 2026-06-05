@@ -1,5 +1,7 @@
 # Map Daddy
 
+Current public version: **v0.1.0**. The canonical release number is tracked in [`VERSION`](VERSION).
+
 Map Daddy is an open-source, web-first projection mapping app. It lets you open a controller/editor in one browser window or device, open a projector output in another, and sync mapping changes live between them.
 
 The current MVP focuses on images, quad surfaces, browser-to-browser realtime sync, and a clean project state model that can later be backed by hosted storage such as Cloudflare, Supabase, Firebase, or S3.

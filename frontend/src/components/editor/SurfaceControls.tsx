@@ -1,5 +1,35 @@
-import { Eye, EyeOff, Layers, Plus, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { AlignCenter, ArrowDown, ArrowUp, CopyPlus, Eye, EyeOff, Grid3x3, Layers, Maximize2, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { normalizeVideoPlaybackSettings } from '../../lib/projects/defaultProject';
 import type { MappingSurface, ProjectMedia } from '../../lib/projects/types';
+import { SourceCropControls } from './SourceCropControls';
+
+function ToolButton({
+  label,
+  title,
+  disabled,
+  onClick,
+  children
+}: {
+  label: string;
+  title: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      className="inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded border border-white/10 bg-white/[0.04] px-2 text-xs font-medium text-slate-100 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      type="button"
+    >
+      {children}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
 
 export function SurfaceControls({
   surfaces,
@@ -8,7 +38,15 @@ export function SurfaceControls({
   onSelectSurface,
   onAddSurface,
   onDeleteSurface,
-  onPatchSurface
+  onPatchSurface,
+  onPatchMedia,
+  onCenterSurface,
+  onFitSurface,
+  onResetSurface,
+  onDuplicateSurface,
+  onBringForward,
+  onSendBackward,
+  onSnapToGrid
 }: {
   surfaces: MappingSurface[];
   media: ProjectMedia[];
@@ -17,8 +55,28 @@ export function SurfaceControls({
   onAddSurface: () => void;
   onDeleteSurface: (surfaceId: string) => void;
   onPatchSurface: (surfaceId: string, patch: Partial<MappingSurface>) => void;
+  onPatchMedia: (mediaId: string, patch: Partial<ProjectMedia>) => void;
+  onCenterSurface: (surfaceId: string) => void;
+  onFitSurface: (surfaceId: string) => void;
+  onResetSurface: (surfaceId: string) => void;
+  onDuplicateSurface: (surfaceId: string) => void;
+  onBringForward: (surfaceId: string) => void;
+  onSendBackward: (surfaceId: string) => void;
+  onSnapToGrid: (surfaceId: string) => void;
 }) {
   const selected = surfaces.find((surface) => surface.id === selectedSurfaceId);
+  const selectedIndex = surfaces.findIndex((surface) => surface.id === selectedSurfaceId);
+  const selectedMedia = selected ? media.find((item) => item.id === selected.mediaId) : undefined;
+  const selectedVideoSettings = selectedMedia?.type === 'video'
+    ? normalizeVideoPlaybackSettings(selectedMedia.videoSettings)
+    : null;
+
+  const patchSelectedVideoSettings = (patch: Partial<NonNullable<ProjectMedia['videoSettings']>>) => {
+    if (!selectedMedia || selectedMedia.type !== 'video' || !selectedVideoSettings) return;
+    onPatchMedia(selectedMedia.id, {
+      videoSettings: normalizeVideoPlaybackSettings({ ...selectedVideoSettings, ...patch })
+    });
+  };
 
   return (
     <section className="rounded border border-white/10 bg-[#151821] p-3">
@@ -56,6 +114,59 @@ export function SurfaceControls({
               {media.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
+          {selectedVideoSettings && (
+            <div className="space-y-3 rounded border border-white/10 bg-black/20 p-3">
+              <div className="text-xs font-semibold uppercase text-slate-300">Video Playback</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex h-9 items-center gap-2 rounded border border-white/10 bg-black/20 px-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-cyan-300"
+                    checked={selectedVideoSettings.loop}
+                    onChange={(event) => patchSelectedVideoSettings({ loop: event.target.checked })}
+                  />
+                  Loop
+                </label>
+                <label className="flex h-9 items-center gap-2 rounded border border-white/10 bg-black/20 px-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-cyan-300"
+                    checked={selectedVideoSettings.muted}
+                    onChange={(event) => patchSelectedVideoSettings({ muted: event.target.checked })}
+                  />
+                  Muted
+                </label>
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-400">Playback Speed</span>
+                <input
+                  className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50"
+                  type="number"
+                  min="0.25"
+                  max="4"
+                  step="0.25"
+                  value={selectedVideoSettings.playbackRate}
+                  onChange={(event) => patchSelectedVideoSettings({ playbackRate: Number(event.target.value) })}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-400">Start Time (seconds)</span>
+                <input
+                  className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={selectedVideoSettings.startTime}
+                  onChange={(event) => patchSelectedVideoSettings({ startTime: Number(event.target.value) })}
+                />
+              </label>
+            </div>
+          )}
+          <SourceCropControls
+            surface={selected}
+            media={selectedMedia}
+            onChange={(sourceRect) => onPatchSurface(selected.id, { sourceRect })}
+          />
           <label className="block">
             <span className="mb-1 block text-xs text-slate-400">Opacity</span>
             <input className="range-cyan w-full" type="range" min="0" max="1" step="0.01" value={selected.opacity} onChange={(event) => onPatchSurface(selected.id, { opacity: Number(event.target.value) })} />
@@ -77,6 +188,18 @@ export function SurfaceControls({
               <option value="exclusion">Exclusion</option>
             </select>
           </label>
+          <div>
+            <span className="mb-2 block text-xs text-slate-400">Tools</span>
+            <div className="grid grid-cols-2 gap-2">
+              <ToolButton label="Center" title="Center on canvas" onClick={() => onCenterSurface(selected.id)}><AlignCenter size={14} /></ToolButton>
+              <ToolButton label="Fit" title="Fit to canvas" onClick={() => onFitSurface(selected.id)}><Maximize2 size={14} /></ToolButton>
+              <ToolButton label="Reset" title="Reset to a centered rectangle" onClick={() => onResetSurface(selected.id)}><RotateCcw size={14} /></ToolButton>
+              <ToolButton label="Copy" title="Duplicate surface" onClick={() => onDuplicateSurface(selected.id)}><CopyPlus size={14} /></ToolButton>
+              <ToolButton label="Forward" title="Bring forward" disabled={selectedIndex >= surfaces.length - 1} onClick={() => onBringForward(selected.id)}><ArrowUp size={14} /></ToolButton>
+              <ToolButton label="Backward" title="Send backward" disabled={selectedIndex <= 0} onClick={() => onSendBackward(selected.id)}><ArrowDown size={14} /></ToolButton>
+              <ToolButton label="Snap" title="Snap corners to 10px grid" onClick={() => onSnapToGrid(selected.id)}><Grid3x3 size={14} /></ToolButton>
+            </div>
+          </div>
           <div className="flex gap-2">
             <button className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded border border-white/10 bg-white/[0.04] text-sm hover:bg-white/[0.08]" onClick={() => onPatchSurface(selected.id, { visible: !selected.visible })}>
               {selected.visible ? <EyeOff size={15} /> : <Eye size={15} />} {selected.visible ? 'Hide' : 'Show'}

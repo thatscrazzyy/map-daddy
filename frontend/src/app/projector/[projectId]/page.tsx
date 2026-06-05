@@ -5,6 +5,7 @@ import { getProject } from '../../../lib/projects/projectRepository';
 import type { ProjectState } from '../../../lib/projects/types';
 import { ProjectRealtimeClient } from '../../../lib/realtime/realtimeClient';
 import { sceneToProjectState } from '../../../lib/rendering/sceneAdapter';
+import { APP_VERSION_LABEL } from '../../../lib/version';
 
 export function ProjectorPage({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<ProjectState | null>(null);
@@ -60,6 +61,7 @@ export function ProjectorPage({ projectId }: { projectId: string }) {
         <div className="absolute left-4 top-4 flex items-center gap-3 rounded border border-white/10 bg-black/60 p-3 backdrop-blur">
           <FullscreenButton target={shellRef} isFullscreen={isFullscreen} onChange={() => setIsFullscreen(!!document.fullscreenElement)} />
           <span className="mono text-xs uppercase tracking-wider text-slate-300">{status}</span>
+          <span className="mono text-xs uppercase tracking-wider text-slate-500">{APP_VERSION_LABEL}</span>
         </div>
       )}
     </main>

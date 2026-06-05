@@ -1,5 +1,12 @@
 export type MediaType = 'image' | 'video';
 
+export type VideoPlaybackSettings = {
+  loop: boolean;
+  muted: boolean;
+  playbackRate: number;
+  startTime: number;
+};
+
 export type Point = {
   x: number;
   y: number;
@@ -10,6 +17,7 @@ export type ProjectMedia = {
   type: MediaType;
   url: string;
   name: string;
+  videoSettings?: VideoPlaybackSettings;
 };
 
 export type SourceRect = {
