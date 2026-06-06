@@ -35,15 +35,13 @@ export function centerSurfaceOnCanvas(surface: MappingSurface, canvas: CanvasSiz
   const bounds = quadBounds(surface.destinationQuad);
   const surfaceCenterX = bounds.left + (bounds.right - bounds.left) / 2;
   const surfaceCenterY = bounds.top + (bounds.bottom - bounds.top) / 2;
-  const canvasCenterX = canvas.width / 2;
-  const canvasCenterY = canvas.height / 2;
 
   return {
     ...surface,
     destinationQuad: offsetQuad(
       surface.destinationQuad,
-      Math.round(canvasCenterX - surfaceCenterX),
-      Math.round(canvasCenterY - surfaceCenterY)
+      Math.round(canvas.width / 2 - surfaceCenterX),
+      Math.round(canvas.height / 2 - surfaceCenterY)
     )
   };
 }

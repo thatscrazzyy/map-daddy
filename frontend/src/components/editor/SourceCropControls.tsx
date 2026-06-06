@@ -93,51 +93,19 @@ export function SourceCropControls({
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className="mb-1 block text-[11px] text-slate-400">X</span>
-          <input
-            className={cropInputClass()}
-            type="number"
-            min="0"
-            max={sourceSize ? Math.max(0, sourceSize.width - 1) : undefined}
-            step="1"
-            value={sourceRect.x}
-            onChange={(event) => patchCrop({ x: Number(event.target.value) })}
-          />
+          <input className={cropInputClass()} type="number" min="0" step="1" value={sourceRect.x} onChange={(event) => patchCrop({ x: Number(event.target.value) })} />
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] text-slate-400">Y</span>
-          <input
-            className={cropInputClass()}
-            type="number"
-            min="0"
-            max={sourceSize ? Math.max(0, sourceSize.height - 1) : undefined}
-            step="1"
-            value={sourceRect.y}
-            onChange={(event) => patchCrop({ y: Number(event.target.value) })}
-          />
+          <input className={cropInputClass()} type="number" min="0" step="1" value={sourceRect.y} onChange={(event) => patchCrop({ y: Number(event.target.value) })} />
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] text-slate-400">Width</span>
-          <input
-            className={cropInputClass()}
-            type="number"
-            min="1"
-            max={sourceSize ? Math.max(1, sourceSize.width - sourceRect.x) : undefined}
-            step="1"
-            value={sourceRect.width}
-            onChange={(event) => patchCrop({ width: Number(event.target.value) })}
-          />
+          <input className={cropInputClass()} type="number" min="1" step="1" value={sourceRect.width} onChange={(event) => patchCrop({ width: Number(event.target.value) })} />
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] text-slate-400">Height</span>
-          <input
-            className={cropInputClass()}
-            type="number"
-            min="1"
-            max={sourceSize ? Math.max(1, sourceSize.height - sourceRect.y) : undefined}
-            step="1"
-            value={sourceRect.height}
-            onChange={(event) => patchCrop({ height: Number(event.target.value) })}
-          />
+          <input className={cropInputClass()} type="number" min="1" step="1" value={sourceRect.height} onChange={(event) => patchCrop({ height: Number(event.target.value) })} />
         </label>
       </div>
 

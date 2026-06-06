@@ -1,20 +1,36 @@
 # Map Daddy
 
-Current public version: **v0.1.0**. The canonical release number is tracked in [`VERSION`](VERSION).
+Current public version: **v0.2.0**. The canonical release number is tracked in [`VERSION`](VERSION).
 
-Map Daddy is an open-source, web-first projection mapping app. It lets you open a controller/editor in one browser window or device, open a projector output in another, and sync mapping changes live between them.
+Map Daddy is an open-source, browser-first projection mapping app for people who want projection mapping without paying for expensive production software. It is designed for hobbyists, makers, students, small creative teams, and anyone who wants to get media mapped onto a wall, poster, screen, or panel quickly.
 
-The current MVP focuses on images, quad surfaces, browser-to-browser realtime sync, and a clean project state model that can later be backed by hosted storage such as Cloudflare, Supabase, Firebase, or S3.
+The v0.2.0 goal is simple: open the app, add media, map a surface, open a projector tab, and have something running in under five minutes. The first success path works fully in one browser without a backend, relay, account, cloud service, or Raspberry Pi.
+
+## What's New in v0.2.0
+
+- Local-first browser workflow: the frontend can run by itself.
+- IndexedDB image persistence for local uploads and sample images.
+- Same-browser editor-to-projector sync through browser-native messaging.
+- One-click sample media for first-time users.
+- First-run checklist for blank projects.
+- Surface tools for center, fit, reset, duplicate, ordering, and snap-to-grid.
+- Source crop controls for mapped media.
+- Video playback controls and a session-only warning for local video uploads.
+- Public version labels in the app and repository.
 
 ## Features
 
 - Browser dashboard for creating and opening projects.
 - Browser editor at `/editor/:projectId`.
 - Browser projector output at `/projector/:projectId`.
-- Live WebSocket sync from editor to one or more projector clients.
-- Local project persistence through FastAPI, with localStorage fallback.
-- Image uploads through the backend media API.
-- Quad surface creation, corner dragging, and whole-surface dragging.
+- Fully local project storage through `localStorage`.
+- Durable local image storage through IndexedDB.
+- Same-browser live projector updates without running the relay.
+- Optional WebSocket relay for multi-device sync.
+- Image uploads, sample media, video uploads, and media selection.
+- Quad surface creation, corner dragging, whole-surface dragging, and keyboard nudging.
+- Surface alignment tools: center, fit, reset, duplicate, bring forward/backward, and snap-to-grid.
+- Source crop controls with full, half, and quarter crop presets.
 - Canvas renderer with lightweight quad warping.
 - Cloudflare Worker support for hosted project API, media storage, and realtime rooms.
 - Legacy Python receiver code remains available for Raspberry Pi and desktop receiver experiments.
@@ -38,28 +54,30 @@ Browser projector output:
 ```text
 Browser Controller / Editor
   - edits project state
-  - uploads/selects media
+  - stores local projects in localStorage
+  - stores local images in IndexedDB
+  - uploads/selects/crops media
   - drags surface corners or whole surfaces
   - saves project state
-  - sends live updates
+  - sends live updates locally or through relay
 
-FastAPI Backend
+Browser Projector
+  - render-only fullscreen output
+  - loads latest saved local project on open
+  - receives same-browser local updates
+
+Optional FastAPI Backend
   - stores projects as JSON
   - serves uploaded media
   - can proxy relay session creation for legacy receiver flows
 
-WebSocket Relay
+Optional WebSocket Relay
   - hosts project rooms
   - broadcasts editor updates to projector clients
   - keeps the latest in-memory project state for reconnects
-
-Browser Projector
-  - render-only fullscreen output
-  - loads latest saved project on open
-  - receives live project updates
 ```
 
-The relay sends JSON only. Media files are referenced by URL and fetched by the browser.
+The browser-only path uses `localStorage`, IndexedDB, `BroadcastChannel`, and `storage` events. The relay sends JSON only and is only needed when you want separate devices to sync over the network.
 
 ## Repository Layout
 
@@ -76,27 +94,7 @@ docs/              Architecture, setup, deployment, and release notes
 
 ## Quick Start
 
-Use three terminals.
-
-Backend:
-
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python main.py
-```
-
-Relay:
-
-```powershell
-cd relay
-npm install
-npm run dev
-```
-
-Frontend:
+For the local-first browser workflow, only the frontend is required:
 
 ```powershell
 cd frontend
@@ -110,34 +108,54 @@ Open:
 http://localhost:5173/dashboard
 ```
 
-Create a project, add/upload media, add or select a surface, then copy or open the projector link in another tab or projector-connected device.
+Create a project, click **Sample** or upload an image, adjust the surface, then open the projector link in another tab or projector-connected browser window.
+
+Optional backend and relay services are still available for hosted or multi-device work:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python main.py
+```
+
+```powershell
+cd relay
+npm install
+npm run dev
+```
 
 ## Primary Product Flow
 
-1. Start the backend, relay, and frontend.
+1. Start the frontend.
 2. Open the dashboard at `http://localhost:5173/dashboard`.
-3. Create or open a project.
-4. In the editor, click **Copy Projector Link** or **Projector**.
-5. Open `/projector/:projectId` on the display connected to your projector.
-6. Click **Fullscreen** on the projector page.
-7. Edit from the browser editor and watch the projector page update live.
+3. Create a project.
+4. Click **Sample** or upload an image.
+5. Drag the surface corners to fit a wall, poster, screen, or panel.
+6. Click **Projector** or copy the projector link.
+7. Open `/projector/:projectId` in another tab or window.
+8. Click **Fullscreen** on the projector page.
+9. Keep editing from the browser editor and watch the projector update locally.
 
 ## Local Testing Checklist
 
-- Start backend in terminal 1.
-- Start relay in terminal 2.
-- Start frontend in terminal 3.
+- Start the frontend.
 - Open the editor in one browser tab.
 - Open the projector page in another browser tab.
-- Upload an image and create or select a surface.
+- Click **Sample** and verify a surface is created automatically.
+- Refresh the editor and verify the sample image persists.
+- Upload an image and verify it persists after refresh.
 - Drag a surface corner and verify the projector updates live.
 - Drag the whole surface and verify the projector updates live.
 - Refresh the projector page and verify the latest saved project loads.
-- Open a second projector tab and verify both projector clients update.
+- Upload a video and verify it is marked session-only in local mode.
 
 ## Local Environment
 
-For local development, create `frontend/.env.local`:
+The browser-only path does not require environment variables.
+
+For hosted or multi-device development, create `frontend/.env.local`:
 
 ```env
 VITE_MAP_DADDY_API_URL=http://localhost:8000
@@ -160,6 +178,8 @@ Then point the frontend to it:
 $env:VITE_MAP_DADDY_RELAY_URL="ws://localhost:8081"
 npm run dev
 ```
+
+If these values are omitted, the frontend stays in local-first mode and avoids trying to connect to localhost services.
 
 ## Testing
 
@@ -194,7 +214,7 @@ node --check src/index.js
 
 ## Project State
 
-The web-first MVP uses this central project shape:
+The local-first project model uses this central shape. Local images are saved in IndexedDB and referenced from project JSON with `local://` URLs; hosted media can still use `/media/...` or absolute URLs.
 
 ```json
 {
@@ -207,9 +227,9 @@ The web-first MVP uses this central project shape:
   },
   "media": [
     {
-      "id": "media_123",
+      "id": "local_media_123",
       "type": "image",
-      "url": "/media/example.png",
+      "url": "local://local_media_123",
       "name": "example.png"
     }
   ],

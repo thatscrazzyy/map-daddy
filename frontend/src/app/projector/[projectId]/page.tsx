@@ -5,7 +5,17 @@ import { getProject } from '../../../lib/projects/projectRepository';
 import type { ProjectState } from '../../../lib/projects/types';
 import { ProjectRealtimeClient } from '../../../lib/realtime/realtimeClient';
 import { sceneToProjectState } from '../../../lib/rendering/sceneAdapter';
-import { APP_VERSION_LABEL } from '../../../lib/version';
+
+function mergeResolvedMediaUrls(project: ProjectState, resolved: ProjectState) {
+  const urlsById = new Map(resolved.media.map((item) => [item.id, item.url]));
+  return {
+    ...project,
+    media: project.media.map((item) => {
+      const resolvedUrl = urlsById.get(item.id);
+      return resolvedUrl ? { ...item, url: resolvedUrl } : item;
+    })
+  };
+}
 
 export function ProjectorPage({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<ProjectState | null>(null);
@@ -13,16 +23,27 @@ export function ProjectorPage({ projectId }: { projectId: string }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cursorHidden, setCursorHidden] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const receivedRealtimeRef = useRef(false);
 
   useEffect(() => {
     let active = true;
+    receivedRealtimeRef.current = false;
     getProject(projectId).then((loaded) => {
-      if (active) setProject(sceneToProjectState(loaded));
+      if (!active) return;
+      const loadedProject = sceneToProjectState(loaded);
+      if (receivedRealtimeRef.current) {
+        setProject((current) => current ? mergeResolvedMediaUrls(current, loadedProject) : loadedProject);
+      } else {
+        setProject(loadedProject);
+      }
     });
     const client = new ProjectRealtimeClient(projectId, 'projector', {
       onStatus: setStatus,
-      onProject: (next) => setProject(sceneToProjectState(next)),
-      onError: setStatus
+      onProject: (next) => {
+        receivedRealtimeRef.current = true;
+        setProject(sceneToProjectState(next));
+      },
+      onError: () => setStatus('local')
     });
     client.connect();
     return () => {
@@ -60,8 +81,7 @@ export function ProjectorPage({ projectId }: { projectId: string }) {
       {!isFullscreen && (
         <div className="absolute left-4 top-4 flex items-center gap-3 rounded border border-white/10 bg-black/60 p-3 backdrop-blur">
           <FullscreenButton target={shellRef} isFullscreen={isFullscreen} onChange={() => setIsFullscreen(!!document.fullscreenElement)} />
-          <span className="mono text-xs uppercase tracking-wider text-slate-300">{status}</span>
-          <span className="mono text-xs uppercase tracking-wider text-slate-500">{APP_VERSION_LABEL}</span>
+          <span className="mono text-xs uppercase tracking-wider text-slate-300">{status === 'synced' || status === 'connected' ? 'Synced' : 'Local'}</span>
         </div>
       )}
     </main>

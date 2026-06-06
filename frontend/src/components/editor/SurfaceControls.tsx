@@ -105,7 +105,7 @@ export function SurfaceControls({
         <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
           <label className="block">
             <span className="mb-1 block text-xs text-slate-400">Name</span>
-            <input className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50" value={selected.name} onChange={(event) => onPatchSurface(selected.id, { name: event.target.value })} />
+            <input aria-label="Name" className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50" value={selected.name} onChange={(event) => onPatchSurface(selected.id, { name: event.target.value })} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-slate-400">Media</span>
@@ -119,46 +119,21 @@ export function SurfaceControls({
               <div className="text-xs font-semibold uppercase text-slate-300">Video Playback</div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex h-9 items-center gap-2 rounded border border-white/10 bg-black/20 px-2 text-sm text-slate-200">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-cyan-300"
-                    checked={selectedVideoSettings.loop}
-                    onChange={(event) => patchSelectedVideoSettings({ loop: event.target.checked })}
-                  />
+                  <input type="checkbox" className="h-4 w-4 accent-cyan-300" checked={selectedVideoSettings.loop} onChange={(event) => patchSelectedVideoSettings({ loop: event.target.checked })} />
                   Loop
                 </label>
                 <label className="flex h-9 items-center gap-2 rounded border border-white/10 bg-black/20 px-2 text-sm text-slate-200">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-cyan-300"
-                    checked={selectedVideoSettings.muted}
-                    onChange={(event) => patchSelectedVideoSettings({ muted: event.target.checked })}
-                  />
+                  <input type="checkbox" className="h-4 w-4 accent-cyan-300" checked={selectedVideoSettings.muted} onChange={(event) => patchSelectedVideoSettings({ muted: event.target.checked })} />
                   Muted
                 </label>
               </div>
               <label className="block">
                 <span className="mb-1 block text-xs text-slate-400">Playback Speed</span>
-                <input
-                  className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50"
-                  type="number"
-                  min="0.25"
-                  max="4"
-                  step="0.25"
-                  value={selectedVideoSettings.playbackRate}
-                  onChange={(event) => patchSelectedVideoSettings({ playbackRate: Number(event.target.value) })}
-                />
+                <input aria-label="Playback Speed" className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50" type="number" min="0.25" max="4" step="0.25" value={selectedVideoSettings.playbackRate} onChange={(event) => patchSelectedVideoSettings({ playbackRate: Number(event.target.value) })} />
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs text-slate-400">Start Time (seconds)</span>
-                <input
-                  className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={selectedVideoSettings.startTime}
-                  onChange={(event) => patchSelectedVideoSettings({ startTime: Number(event.target.value) })}
-                />
+                <input aria-label="Start Time (seconds)" className="h-9 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50" type="number" min="0" step="0.1" value={selectedVideoSettings.startTime} onChange={(event) => patchSelectedVideoSettings({ startTime: Number(event.target.value) })} />
               </label>
             </div>
           )}

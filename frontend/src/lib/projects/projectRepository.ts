@@ -1,7 +1,8 @@
 import { DEFAULT_VIDEO_PLAYBACK_SETTINGS, createDefaultProject, normalizeProject } from './defaultProject';
 import type { ProjectMedia, ProjectState, ProjectSummary } from './types';
+import { saveLocalMedia, getLocalMediaBlob, deleteLocalMedia } from './localMediaStore';
 
-const DEV_BACKEND_URL = import.meta.env.PROD ? '' : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000');
+const DEV_BACKEND_URL = '';
 export const API_URL = (localStorage.getItem('md_api_url') || import.meta.env.VITE_MAP_DADDY_API_URL || DEV_BACKEND_URL || '').replace(/\/$/, '');
 export const PUBLIC_BACKEND_URL = (import.meta.env.VITE_MAP_DADDY_PUBLIC_BACKEND_URL || API_URL || '').replace(/\/$/, '');
 
@@ -11,6 +12,32 @@ const projectKey = (projectId: string) => `map-daddy.project.${projectId}`;
 function absoluteMediaUrl(url: string) {
   if (!url || !PUBLIC_BACKEND_URL || !url.startsWith('/media/')) return url;
   return `${PUBLIC_BACKEND_URL}${url}`;
+}
+
+function localMediaId(media: ProjectMedia): string | null {
+  if (media.url.startsWith('local://')) return media.url.replace('local://', '');
+  if (media.id.startsWith('local_media_')) return media.id;
+  return null;
+}
+
+function storedMedia(media: ProjectMedia): ProjectMedia {
+  const id = localMediaId(media);
+  if (id) return { ...media, id, url: `local://${id}` };
+  if (media.url.startsWith('session://')) return media;
+  if (media.id.startsWith('session_media_')) return { ...media, url: `session://${media.id}` };
+  return media;
+}
+
+function createMediaObjectUrl(blob: Blob) {
+  return URL.createObjectURL(blob);
+}
+
+export function releaseProjectMediaObjectUrls(project: ProjectState | null): void {
+  for (const media of project?.media || []) {
+    if (media.url.startsWith('blob:')) {
+      URL.revokeObjectURL(media.url);
+    }
+  }
 }
 
 function localList(): ProjectSummary[] {
@@ -34,7 +61,13 @@ function localList(): ProjectSummary[] {
 
 function localSave(project: ProjectState) {
   const normalized = normalizeProject({ ...project, updatedAt: new Date().toISOString() });
-  localStorage.setItem(projectKey(normalized.id), JSON.stringify(normalized));
+
+  const toSave = {
+    ...normalized,
+    media: normalized.media.map(storedMedia)
+  };
+
+  localStorage.setItem(projectKey(normalized.id), JSON.stringify(toSave));
   const ids = new Set(JSON.parse(localStorage.getItem(PROJECT_INDEX_KEY) || '[]') as string[]);
   ids.add(normalized.id);
   localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify([...ids]));
@@ -67,28 +100,54 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 }
 
 export async function getProject(projectId: string): Promise<ProjectState> {
+  let project: ProjectState;
   try {
-    const project = await requestJson<ProjectState>(`/api/projects/${encodeURIComponent(projectId)}`);
-    return normalizeProject({
-      ...project,
-      media: project.media.map((item) => ({ ...item, url: absoluteMediaUrl(item.url) }))
+    const apiProject = await requestJson<ProjectState>(`/api/projects/${encodeURIComponent(projectId)}`);
+    project = normalizeProject({
+      ...apiProject,
+      media: apiProject.media.map((item) => ({ ...item, url: absoluteMediaUrl(item.url) }))
     });
   } catch {
     const raw = localStorage.getItem(projectKey(projectId));
-    if (raw) return normalizeProject(JSON.parse(raw));
-    const project = createDefaultProject('Map Daddy Project');
-    project.id = projectId;
-    return localSave(project);
+    if (raw) {
+      project = normalizeProject(JSON.parse(raw));
+    } else {
+      project = createDefaultProject('Map Daddy Project');
+      project.id = projectId;
+      project = localSave(project);
+    }
   }
+
+  // Resolve local media URLs
+  for (const m of project.media) {
+    const id = localMediaId(m);
+    if (id) {
+      const blob = await getLocalMediaBlob(id);
+      if (blob) {
+        m.id = id;
+        m.url = createMediaObjectUrl(blob);
+      } else {
+        m.url = '';
+      }
+    } else if (m.id.startsWith('session_media_') || m.url.startsWith('session://')) {
+      m.url = '';
+    }
+  }
+
+  return project;
 }
 
 export async function saveProject(project: ProjectState): Promise<ProjectState> {
   const normalized = normalizeProject({ ...project, updatedAt: new Date().toISOString() });
   localSave(normalized);
   try {
+    const toSave = {
+      ...normalized,
+      media: normalized.media.map(storedMedia)
+    };
     return await requestJson<ProjectState>(`/api/projects/${encodeURIComponent(normalized.id)}`, {
       method: 'PUT',
-      body: JSON.stringify(normalized)
+      body: JSON.stringify(toSave)
     });
   } catch {
     return normalized;
@@ -101,6 +160,21 @@ export async function renameProject(projectId: string, name: string): Promise<Pr
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
+  const raw = localStorage.getItem(projectKey(projectId));
+  if (raw) {
+    try {
+      const project = JSON.parse(raw) as ProjectState;
+      for (const m of project.media || []) {
+        const id = localMediaId(m);
+        if (id) {
+          await deleteLocalMedia(id);
+        }
+      }
+    } catch {
+      // Ignore parse errors during cleanup
+    }
+  }
+
   localDelete(projectId);
   try {
     await requestJson<{ status: string }>(`/api/projects/${encodeURIComponent(projectId)}`, {
@@ -124,26 +198,42 @@ export async function createProject(name: string): Promise<ProjectState> {
   }
 }
 
-export async function uploadMedia(file: File): Promise<ProjectMedia> {
-  const type = file.type.startsWith('video/') ? 'video' : 'image';
+export async function uploadMedia(file: File, options: { onSessionOnlyMedia?: (message: string) => void } = {}): Promise<ProjectMedia> {
   if (API_URL) {
-    const body = new FormData();
-    body.append('file', file);
-    const result = await requestJson<{ url: string; filename: string }>('/api/media/upload', { method: 'POST', body });
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const result = await requestJson<{ url: string; filename: string }>('/api/media/upload', { method: 'POST', body });
+      return {
+        id: `media_${Date.now().toString(36)}`,
+        type: file.type.startsWith('video/') ? 'video' : 'image',
+        url: absoluteMediaUrl(result.url),
+        name: file.name,
+        ...(file.type.startsWith('video/') ? { videoSettings: { ...DEFAULT_VIDEO_PLAYBACK_SETTINGS } } : {})
+      };
+    } catch {
+      // Fall through to local mode if backend fails
+    }
+  }
+
+  const isVideo = file.type.startsWith('video/');
+  if (isVideo) {
+    options.onSessionOnlyMedia?.('Videos are session-only in local mode and will not persist after refresh.');
     return {
-      id: `media_${Date.now().toString(36)}`,
-      type,
-      url: absoluteMediaUrl(result.url),
+      id: `session_media_${Date.now().toString(36)}`,
+      type: 'video',
+      url: createMediaObjectUrl(file),
       name: file.name,
-      ...(type === 'video' ? { videoSettings: { ...DEFAULT_VIDEO_PLAYBACK_SETTINGS } } : {})
+      videoSettings: { ...DEFAULT_VIDEO_PLAYBACK_SETTINGS }
     };
   }
 
+  const id = `local_media_${Date.now().toString(36)}`;
+  await saveLocalMedia(id, file);
   return {
-    id: `media_${Date.now().toString(36)}`,
-    type,
-    url: URL.createObjectURL(file),
-    name: file.name,
-    ...(type === 'video' ? { videoSettings: { ...DEFAULT_VIDEO_PLAYBACK_SETTINGS } } : {})
+    id,
+    type: 'image',
+    url: createMediaObjectUrl(file),
+    name: file.name
   };
 }

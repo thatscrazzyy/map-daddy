@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, ExternalLink, Home, Save } from 'lucide-react';
 import { EditorCanvas } from '../../../components/editor/EditorCanvas';
+import { FirstRunChecklist } from '../../../components/editor/FirstRunChecklist';
 import { MediaPanel } from '../../../components/editor/MediaPanel';
 import { ProjectorStatus } from '../../../components/editor/ProjectorStatus';
 import { SurfaceControls } from '../../../components/editor/SurfaceControls';
 import { createDefaultSurface } from '../../../lib/projects/defaultProject';
-import { getProject, saveProject, uploadMedia } from '../../../lib/projects/projectRepository';
+import { getProject, releaseProjectMediaObjectUrls, saveProject, uploadMedia } from '../../../lib/projects/projectRepository';
+import { generateSampleImage } from '../../../lib/projects/sampleMedia';
 import {
   centerSurfaceOnCanvas,
   duplicateSurface,
@@ -70,6 +72,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [projectorCount, setProjectorCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState('');
+  const [mediaNotice, setMediaNotice] = useState('');
   const [copiedProjectorLink, setCopiedProjectorLink] = useState(false);
   const realtimeRef = useRef<ProjectRealtimeClient | null>(null);
   const saveTimerRef = useRef(0);
@@ -87,7 +90,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
       const client = new ProjectRealtimeClient(projectId, 'editor', {
         onStatus: setSyncStatus,
         onPresence: (presence) => setProjectorCount(presence.projectorCount),
-        onError: (message) => setSyncStatus(message)
+        onError: () => setSyncStatus('local')
       });
       realtimeRef.current = client;
       client.connect();
@@ -97,6 +100,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
       active = false;
       window.clearTimeout(saveTimerRef.current);
       realtimeRef.current?.disconnect();
+      releaseProjectMediaObjectUrls(projectRef.current);
     };
   }, [projectId]);
 
@@ -253,8 +257,9 @@ export function EditorPage({ projectId }: { projectId: string }) {
   };
 
   const handleUpload = async (file: File) => {
+    setMediaNotice('');
     const dimensions = await mediaDimensions(file);
-    const media = await uploadMedia(file);
+    const media = await uploadMedia(file, { onSessionOnlyMedia: setMediaNotice });
     commitProject((current) => {
       const selected = current.surfaces.find((surface) => surface.id === selectedSurfaceId);
       if (!selected) {
@@ -268,6 +273,11 @@ export function EditorPage({ projectId }: { projectId: string }) {
       ));
       return { ...current, media: [...current.media, media], surfaces };
     });
+  };
+
+  const handleAddSample = async () => {
+    const file = await generateSampleImage();
+    await handleUpload(file);
   };
 
   const go = (path: string) => {
@@ -343,8 +353,9 @@ export function EditorPage({ projectId }: { projectId: string }) {
         </div>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-[300px,1fr,300px] gap-4 p-4 max-lg:grid-cols-1 max-lg:overflow-auto">
-        <div className="space-y-4">
-          <MediaPanel media={project.media} onUpload={handleUpload} />
+        <div className="space-y-4 shrink-0">
+          <MediaPanel media={project.media} notice={mediaNotice} onUpload={handleUpload} onAddSample={handleAddSample} />
+          <FirstRunChecklist project={project} projectorCount={projectorCount} />
         </div>
         <EditorCanvas project={project} selectedSurfaceId={selectedSurfaceId} onSelectSurface={setSelectedSurfaceId} onMoveCorner={moveCorner} onMoveSurface={moveSurface} />
         <SurfaceControls
