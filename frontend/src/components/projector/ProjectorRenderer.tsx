@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { normalizeVideoPlaybackSettings } from '../../lib/projects/defaultProject';
 import type { ProjectMedia, ProjectState } from '../../lib/projects/types';
-import { renderProjectToCanvas } from '../../lib/rendering/canvasRenderer';
+import { drawCalibrationGrid, renderProjectToCanvas } from '../../lib/rendering/canvasRenderer';
+import { LiveSkyManager } from '../../layers/skyScene';
 
 type Drawable = HTMLImageElement | HTMLVideoElement;
 type AppliedVideoSettings = {
@@ -67,9 +68,14 @@ function loadDrawable(media: ProjectMedia): Drawable {
   return image;
 }
 
-export function ProjectorRenderer({ project, className = '' }: { project: ProjectState; className?: string }) {
+export function ProjectorRenderer({ project, className = '', showGrid = false }: { project: ProjectState; className?: string; showGrid?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mediaMapRef = useRef(new Map<string, Drawable>());
+  const liveManagerRef = useRef<LiveSkyManager | null>(null);
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  const showGridRef = useRef(showGrid);
+  showGridRef.current = showGrid;
   const mediaSignature = useMemo(() => project.media.map((item) => `${item.id}:${item.url}:${item.type}`).join('|'), [project.media]);
   const videoSettingsSignature = useMemo(() => project.media.map((item) => {
     if (item.type !== 'video') return `${item.id}:image`;
@@ -122,12 +128,28 @@ export function ProjectorRenderer({ project, className = '' }: { project: Projec
 
     let frame = 0;
     const render = () => {
-      renderProjectToCanvas(ctx, project, mediaMapRef.current);
+      const current = projectRef.current;
+      const hasLive = current.surfaces.some((surface) => surface.contentType === 'live');
+      let liveCanvases: Map<string, HTMLCanvasElement> | undefined;
+      if (hasLive) {
+        if (!liveManagerRef.current) liveManagerRef.current = new LiveSkyManager();
+        liveCanvases = liveManagerRef.current.update(current.surfaces, new Date());
+      } else if (liveManagerRef.current) {
+        liveManagerRef.current.dispose();
+        liveManagerRef.current = null;
+      }
+      renderProjectToCanvas(ctx, current, mediaMapRef.current, liveCanvases);
+      if (showGridRef.current) drawCalibrationGrid(ctx, current.canvas.width, current.canvas.height);
       frame = window.requestAnimationFrame(render);
     };
     render();
     return () => window.cancelAnimationFrame(frame);
   }, [project]);
+
+  useEffect(() => () => {
+    liveManagerRef.current?.dispose();
+    liveManagerRef.current = null;
+  }, []);
 
   return (
     <canvas

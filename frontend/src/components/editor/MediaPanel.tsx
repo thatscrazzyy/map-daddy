@@ -15,20 +15,21 @@ export function MediaPanel({
   disabled?: boolean;
 }) {
   return (
-    <section className="rounded border border-white/10 bg-[#151821] p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-100">Media</h2>
-        <div className="flex gap-2">
+    <section className="border-b border-[#111009] p-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="md-section-label">Media</h2>
+        <div className="flex gap-1">
           <button
             disabled={disabled}
             onClick={onAddSample}
-            className={`inline-flex h-8 items-center gap-1.5 rounded border border-cyan-300/20 px-2 text-xs text-cyan-200 ${disabled ? 'opacity-50' : 'hover:bg-cyan-300/10'}`}
+            className="md-button h-7 gap-1 px-2 text-[11px]"
             title="Add sample grid"
+            type="button"
           >
-            <Plus size={14} /> Sample
+            <Plus size={13} /> Sample
           </button>
-          <label className={`inline-flex h-8 items-center gap-1.5 rounded border border-cyan-300/40 px-2 text-xs text-cyan-100 ${disabled ? 'opacity-50' : 'cursor-pointer hover:bg-cyan-300/10'}`}>
-            <Upload size={14} />
+          <label className={`md-button h-7 gap-1 px-2 text-[11px] ${disabled ? 'opacity-50' : 'cursor-pointer'}`}>
+            <Upload size={13} />
             Upload
             <input disabled={disabled} type="file" accept="image/*,video/*" className="hidden" onChange={(event) => {
               const file = event.currentTarget.files?.[0];
@@ -39,22 +40,22 @@ export function MediaPanel({
         </div>
       </div>
       {notice && (
-        <div className="mb-3 rounded border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+        <div className="mb-2 rounded-[3px] border border-[#e8a02055] bg-[#e8a02012] px-2 py-1.5 text-[11px] leading-4 text-[#c8b89a]">
           {notice}
         </div>
       )}
       <div className="space-y-2">
-        {media.length === 0 && <div className="rounded border border-dashed border-white/10 p-4 text-sm text-slate-500">No media yet.</div>}
+        {media.length === 0 && <div className="rounded-[3px] border border-dashed border-[#1e1c14] p-3 text-xs text-[#7a6a4a]">No media yet.</div>}
         {media.map((item) => (
-          <div key={item.id} className="flex items-center gap-3 rounded border border-white/10 bg-black/20 p-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded bg-black/40 text-slate-300">
-              {item.type === 'video' ? <Video size={16} /> : <ImageIcon size={16} />}
+          <div key={item.id} className="flex items-center gap-2 rounded-[3px] border border-[#1e1c14] bg-[#0e0d0a] p-1.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] bg-[#030303] text-[#7a6a4a]">
+              {item.type === 'video' ? <Video size={15} /> : <ImageIcon size={15} />}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm text-slate-100">{item.name}</div>
-              <div className="mono text-[10px] uppercase text-slate-500">{item.type}</div>
+              <div className="truncate text-xs text-[#c8b89a]">{item.name}</div>
+              <div className="mono text-[9px] uppercase tracking-[0.12em] text-[#7a6a4a]">{item.type}</div>
               {item.id.startsWith('session_media_') && (
-                <div className="text-[11px] text-yellow-200">Session only</div>
+                <div className="mono text-[9px] uppercase tracking-[0.12em] text-[#e8a020]">Session only</div>
               )}
             </div>
           </div>

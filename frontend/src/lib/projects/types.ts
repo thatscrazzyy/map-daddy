@@ -27,6 +27,36 @@ export type SourceRect = {
   height: number;
 };
 
+export type SurfaceContentType = 'image' | 'live';
+
+export type LiveLayerId = 'bedroom-sky';
+
+export type LiveLayerConfig = {
+  lat: number;
+  lon: number;
+  showStars: boolean;
+  showISS: boolean;
+  showFlights: boolean;
+  showAurora: boolean;
+  starSize: number;
+  opacity: number;
+};
+
+export type SurfaceCalibration = {
+  wallBearingDeg: number;
+  fovDeg: number;
+  rotationOffsetDeg: number;
+  elevationOffsetDeg: number;
+  pitchDeg: number;
+};
+
+// Transient, set on a live surface to flash a reference star on the output.
+// Synced through the normal project:update channel; `until` is an epoch-ms deadline.
+export type FlashTarget = {
+  name: string;
+  until: number;
+} | null;
+
 export type MappingSurface = {
   id: string;
   name: string;
@@ -36,6 +66,12 @@ export type MappingSurface = {
   blendMode: string;
   sourceRect: SourceRect;
   destinationQuad: [Point, Point, Point, Point];
+  edgeFeather?: number;
+  contentType?: SurfaceContentType;
+  liveLayerId?: LiveLayerId;
+  liveConfig?: LiveLayerConfig;
+  calibration?: SurfaceCalibration;
+  flashTarget?: FlashTarget;
 };
 
 export type ProjectState = {

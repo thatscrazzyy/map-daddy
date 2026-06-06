@@ -100,7 +100,7 @@ test.describe('Map Daddy Browser Projection MVP', () => {
     await expect(page.getByRole('button', { name: 'Copy', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Forward/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Backward/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Snap/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Snap', exact: true })).toBeVisible();
   });
 
   test('dashboard can rename and delete a project', async ({ page }) => {
@@ -162,6 +162,7 @@ test.describe('Map Daddy v0.2.0 Local First', () => {
   test('local image sample renders in projector after editor refresh', async ({ page, context }) => {
     const projectId = await createProject(page);
     await addSample(page);
+    await expectLocalSamplePersisted(page, projectId);
 
     await page.reload();
     await expect(mediaPanel(page).getByText(/map-daddy-sample-.*\.png/)).toBeVisible();
@@ -195,7 +196,7 @@ test.describe('Map Daddy v0.2.0 Local First', () => {
     const projectId = await createProject(page);
     await addSample(page);
 
-    await expect(page.getByText(/No projector connected|Local projector connected|Synced/i)).toBeVisible();
+    await expect(page.getByText(/No projector|Local projector connected|Synced/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Surface 1/i })).toBeVisible();
     await page.getByLabel('Name').fill('Lobby Wall');
     await expect.poll(
@@ -233,5 +234,70 @@ test.describe('Map Daddy v0.2.0 Local First', () => {
     await expect(page.getByLabel('Muted')).toBeChecked();
     await expect(page.getByLabel('Playback Speed')).toHaveValue('1');
     await expect(page.getByLabel('Start Time (seconds)')).toHaveValue('0');
+  });
+});
+
+test.describe('Bedroom Sky live layer', () => {
+  // External sky feeds are non-deterministic; abort them so the layer renders
+  // from its graceful-degradation path (no network) and the test stays hermetic.
+  test.beforeEach(async ({ context }) => {
+    await context.route('**/api.airplanes.live/**', (route) => route.abort());
+    await context.route('**/celestrak.org/**', (route) => route.abort());
+  });
+
+  test('surface can switch to a live layer and open calibration', async ({ page }) => {
+    await createProject(page);
+    await page.getByRole('button', { name: /^Add$/ }).click();
+
+    await page.getByLabel('Content type').selectOption('live');
+
+    // live layer controls appear, image-only controls go away
+    await expect(page.getByLabel('Live layer')).toBeVisible();
+    await expect(page.getByText(/aircraft/i)).toBeVisible();
+    await expect(page.getByText('Source Crop')).toHaveCount(0);
+
+    // open the calibration panel and confirm the core controls mount
+    await page.getByRole('button', { name: /Calibrate/i }).click();
+    await expect(page.getByRole('slider', { name: /Wall bearing/i })).toBeVisible();
+    await expect(page.getByLabel('Field of view')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Save calibration/i })).toBeVisible();
+
+    // adjusting the bearing input updates without error, then save closes the panel
+    await page.getByLabel('Wall bearing degrees').fill('220');
+    await page.getByRole('button', { name: /Save calibration/i }).click();
+    await expect(page.getByRole('button', { name: /Save calibration/i })).toHaveCount(0);
+
+    // the live layer persists into the stored project
+    const projectId = page.url().split('/editor/')[1];
+    await expect.poll(() => page.evaluate((id) => {
+      const raw = localStorage.getItem(`map-daddy.project.${id}`);
+      if (!raw) return null;
+      const project = JSON.parse(raw);
+      const live = project.surfaces?.find((surface: { contentType?: string }) => surface.contentType === 'live');
+      return live ? live.liveLayerId : null;
+    }, projectId)).toBe('bedroom-sky');
+  });
+
+  test('align seam matches the second wall bearing to the first', async ({ page }) => {
+    await createProject(page);
+    // two surfaces, both live
+    await page.getByRole('button', { name: /^Add$/ }).click();
+    await page.getByLabel('Content type').selectOption('live');
+    await page.getByRole('button', { name: /^Add$/ }).click();
+    await page.getByLabel('Content type').selectOption('live');
+
+    // align seam appears once a sibling live surface exists
+    await expect(page.getByRole('button', { name: /Align seam/i })).toBeVisible();
+    await page.getByRole('button', { name: /Align seam/i }).click();
+
+    // surface B bearing becomes A.bearing (220) + A.fov (80) = 300
+    const projectId = page.url().split('/editor/')[1];
+    await expect.poll(() => page.evaluate((id) => {
+      const raw = localStorage.getItem(`map-daddy.project.${id}`);
+      if (!raw) return null;
+      const project = JSON.parse(raw);
+      const live = project.surfaces?.filter((surface: { contentType?: string }) => surface.contentType === 'live');
+      return live?.length === 2 ? Math.round(live[1].calibration.wallBearingDeg) : null;
+    }, projectId)).toBe(300);
   });
 });

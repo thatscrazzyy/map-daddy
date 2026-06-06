@@ -31,7 +31,7 @@ function loadMediaSize(media?: ProjectMedia): Promise<SourceSize | null> {
 }
 
 function cropInputClass() {
-  return 'h-8 w-full rounded border border-white/10 bg-black/30 px-2 text-sm outline-none focus:border-cyan-300/50';
+  return 'md-input h-7 text-[11px]';
 }
 
 export function SourceCropControls({
@@ -80,43 +80,43 @@ export function SourceCropControls({
   };
 
   return (
-    <div className="space-y-3 rounded border border-white/10 bg-black/20 p-3">
+    <div className="space-y-2 border-t border-[#111009] pt-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
-          <Crop size={14} /> Source Crop
+        <h3 className="md-section-label flex items-center gap-2">
+          <Crop size={13} /> Source Crop
         </h3>
-        <span className="mono text-[10px] uppercase text-slate-500">
+        <span className="mono text-[9px] uppercase tracking-[0.12em] text-[#7a6a4a]">
           {isLoadingSize ? 'Loading' : sourceSize ? `${sourceSize.width} x ${sourceSize.height}` : 'Unbounded'}
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
-          <span className="mb-1 block text-[11px] text-slate-400">X</span>
+          <span className="mb-1 block text-[9px] text-[#7a6a4a]">X</span>
           <input className={cropInputClass()} type="number" min="0" step="1" value={sourceRect.x} onChange={(event) => patchCrop({ x: Number(event.target.value) })} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[11px] text-slate-400">Y</span>
+          <span className="mb-1 block text-[9px] text-[#7a6a4a]">Y</span>
           <input className={cropInputClass()} type="number" min="0" step="1" value={sourceRect.y} onChange={(event) => patchCrop({ y: Number(event.target.value) })} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[11px] text-slate-400">Width</span>
+          <span className="mb-1 block text-[9px] text-[#7a6a4a]">Width</span>
           <input className={cropInputClass()} type="number" min="1" step="1" value={sourceRect.width} onChange={(event) => patchCrop({ width: Number(event.target.value) })} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[11px] text-slate-400">Height</span>
+          <span className="mb-1 block text-[9px] text-[#7a6a4a]">Height</span>
           <input className={cropInputClass()} type="number" min="1" step="1" value={sourceRect.height} onChange={(event) => patchCrop({ height: Number(event.target.value) })} />
         </label>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <button className="h-8 rounded border border-white/10 bg-white/[0.04] text-xs hover:bg-white/[0.08]" onClick={() => applyPreset('full')}>
+      <div className="grid grid-cols-3 gap-1">
+        <button className="md-button h-7 text-[11px]" onClick={() => applyPreset('full')} type="button">
           Full
         </button>
-        <button className="h-8 rounded border border-white/10 bg-white/[0.04] text-xs hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40" onClick={() => applyPreset('center-half')} disabled={!sourceSize}>
+        <button className="md-button h-7 text-[11px]" onClick={() => applyPreset('center-half')} disabled={!sourceSize} type="button">
           1/2
         </button>
-        <button className="h-8 rounded border border-white/10 bg-white/[0.04] text-xs hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40" onClick={() => applyPreset('center-quarter')} disabled={!sourceSize}>
+        <button className="md-button h-7 text-[11px]" onClick={() => applyPreset('center-quarter')} disabled={!sourceSize} type="button">
           1/4
         </button>
       </div>

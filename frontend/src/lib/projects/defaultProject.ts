@@ -1,4 +1,12 @@
-import type { MappingSurface, ProjectState, VideoPlaybackSettings } from './types';
+import type {
+  LiveLayerConfig,
+  LiveLayerId,
+  MappingSurface,
+  ProjectState,
+  SurfaceCalibration,
+  SurfaceContentType,
+  VideoPlaybackSettings
+} from './types';
 import { normalizeSourceRect } from './sourceRect';
 
 export function uid(prefix: string) {
@@ -23,6 +31,50 @@ export function normalizeVideoPlaybackSettings(settings: Partial<VideoPlaybackSe
     muted: settings?.muted !== false,
     playbackRate: Math.max(0.25, Math.min(4, finiteNumber(settings?.playbackRate, DEFAULT_VIDEO_PLAYBACK_SETTINGS.playbackRate))),
     startTime: Math.max(0, finiteNumber(settings?.startTime, DEFAULT_VIDEO_PLAYBACK_SETTINGS.startTime))
+  };
+}
+
+export const DEFAULT_LIVE_LAYER_ID: LiveLayerId = 'bedroom-sky';
+
+export const DEFAULT_LIVE_CONFIG: LiveLayerConfig = {
+  lat: 32.7,
+  lon: -97.3,
+  showStars: true,
+  showISS: true,
+  showFlights: true,
+  showAurora: true,
+  starSize: 1.4,
+  opacity: 1
+};
+
+export const DEFAULT_CALIBRATION: SurfaceCalibration = {
+  wallBearingDeg: 220,
+  fovDeg: 80,
+  rotationOffsetDeg: 0,
+  elevationOffsetDeg: 0,
+  pitchDeg: 0
+};
+
+export function normalizeLiveConfig(config: Partial<LiveLayerConfig> | null | undefined): LiveLayerConfig {
+  return {
+    lat: finiteNumber(config?.lat, DEFAULT_LIVE_CONFIG.lat),
+    lon: finiteNumber(config?.lon, DEFAULT_LIVE_CONFIG.lon),
+    showStars: config?.showStars !== false,
+    showISS: config?.showISS !== false,
+    showFlights: config?.showFlights !== false,
+    showAurora: config?.showAurora !== false,
+    starSize: Math.max(0.3, Math.min(4, finiteNumber(config?.starSize, DEFAULT_LIVE_CONFIG.starSize))),
+    opacity: Math.max(0, Math.min(1, finiteNumber(config?.opacity, DEFAULT_LIVE_CONFIG.opacity)))
+  };
+}
+
+export function normalizeCalibration(calibration: Partial<SurfaceCalibration> | null | undefined): SurfaceCalibration {
+  return {
+    wallBearingDeg: ((finiteNumber(calibration?.wallBearingDeg, DEFAULT_CALIBRATION.wallBearingDeg) % 360) + 360) % 360,
+    fovDeg: Math.max(20, Math.min(160, finiteNumber(calibration?.fovDeg, DEFAULT_CALIBRATION.fovDeg))),
+    rotationOffsetDeg: finiteNumber(calibration?.rotationOffsetDeg, 0),
+    elevationOffsetDeg: finiteNumber(calibration?.elevationOffsetDeg, 0),
+    pitchDeg: finiteNumber(calibration?.pitchDeg, 0)
   };
 }
 
@@ -82,23 +134,39 @@ export function normalizeProject(project: Partial<ProjectState> | null | undefin
         ...(type === 'video' ? { videoSettings: normalizeVideoPlaybackSettings(item.videoSettings) } : {})
       };
     }),
-    surfaces: (project?.surfaces || []).map((surface, index) => ({
-      id: surface.id || uid('surface'),
-      name: surface.name || `Surface ${index + 1}`,
-      mediaId: surface.mediaId || '',
-      visible: surface.visible !== false,
-      opacity: Number(surface.opacity ?? 1),
-      blendMode: surface.blendMode || 'source-over',
-      sourceRect: normalizeSourceRect({
-        x: surface.sourceRect?.x ?? 0,
-        y: surface.sourceRect?.y ?? 0,
-        width: surface.sourceRect?.width ?? canvas.width ?? 1920,
-        height: surface.sourceRect?.height ?? canvas.height ?? 1080
-      }),
-      destinationQuad: (surface.destinationQuad?.length === 4
-        ? surface.destinationQuad
-        : createDefaultSurface(fallback).destinationQuad) as typeof surface.destinationQuad
-    })) as ProjectState['surfaces'],
+    surfaces: (project?.surfaces || []).map((surface, index) => {
+      const contentType: SurfaceContentType = surface.contentType === 'live' ? 'live' : 'image';
+      const isLive = contentType === 'live';
+      return {
+        id: surface.id || uid('surface'),
+        name: surface.name || `Surface ${index + 1}`,
+        mediaId: surface.mediaId || '',
+        visible: surface.visible !== false,
+        opacity: Number(surface.opacity ?? 1),
+        blendMode: surface.blendMode || 'source-over',
+        sourceRect: normalizeSourceRect({
+          x: surface.sourceRect?.x ?? 0,
+          y: surface.sourceRect?.y ?? 0,
+          width: surface.sourceRect?.width ?? canvas.width ?? 1920,
+          height: surface.sourceRect?.height ?? canvas.height ?? 1080
+        }),
+        destinationQuad: (surface.destinationQuad?.length === 4
+          ? surface.destinationQuad
+          : createDefaultSurface(fallback).destinationQuad) as typeof surface.destinationQuad,
+        edgeFeather: Math.max(0, Math.min(0.49, finiteNumber(surface.edgeFeather, 0))),
+        contentType,
+        ...(isLive
+          ? {
+              liveLayerId: surface.liveLayerId || DEFAULT_LIVE_LAYER_ID,
+              liveConfig: normalizeLiveConfig(surface.liveConfig),
+              calibration: normalizeCalibration(surface.calibration),
+              ...(surface.flashTarget && surface.flashTarget.until > Date.now()
+                ? { flashTarget: { name: String(surface.flashTarget.name), until: Number(surface.flashTarget.until) } }
+                : {})
+            }
+          : {})
+      };
+    }) as ProjectState['surfaces'],
     updatedAt: project?.updatedAt || new Date().toISOString()
   };
 }

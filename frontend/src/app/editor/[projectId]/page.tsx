@@ -1,11 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, ExternalLink, Home, Save } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  Grid3x3,
+  Home,
+  Image as ImageIcon,
+  Layers,
+  Magnet,
+  MousePointer2,
+  Move,
+  Redo2,
+  Settings,
+  Undo2,
+  ZoomIn,
+  ZoomOut
+} from 'lucide-react';
+import { CalibrationPanel } from '../../../components/editor/CalibrationPanel';
 import { EditorCanvas } from '../../../components/editor/EditorCanvas';
 import { FirstRunChecklist } from '../../../components/editor/FirstRunChecklist';
 import { MediaPanel } from '../../../components/editor/MediaPanel';
 import { ProjectorStatus } from '../../../components/editor/ProjectorStatus';
 import { SurfaceControls } from '../../../components/editor/SurfaceControls';
-import { createDefaultSurface } from '../../../lib/projects/defaultProject';
+import { seamAlignedBearing } from '../../../layers/skyProjection';
+import { createDefaultSurface, normalizeCalibration } from '../../../lib/projects/defaultProject';
 import { getProject, releaseProjectMediaObjectUrls, saveProject, uploadMedia } from '../../../lib/projects/projectRepository';
 import { generateSampleImage } from '../../../lib/projects/sampleMedia';
 import {
@@ -17,7 +35,7 @@ import {
   resetSurfaceRectangle,
   snapSurfaceToGrid
 } from '../../../lib/projects/surfaceOperations';
-import type { MappingSurface, ProjectMedia, ProjectState } from '../../../lib/projects/types';
+import type { MappingSurface, ProjectMedia, ProjectState, SurfaceCalibration } from '../../../lib/projects/types';
 import { ProjectRealtimeClient } from '../../../lib/realtime/realtimeClient';
 import { appPath } from '../../../lib/routing';
 import { APP_VERSION_LABEL } from '../../../lib/version';
@@ -72,9 +90,13 @@ export function EditorPage({ projectId }: { projectId: string }) {
   const [selectedSurfaceId, setSelectedSurfaceId] = useState('');
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [projectorCount, setProjectorCount] = useState(0);
-  const [saveStatus, setSaveStatus] = useState('');
+  const [isDirty, setIsDirty] = useState(false);
   const [mediaNotice, setMediaNotice] = useState('');
   const [copiedProjectorLink, setCopiedProjectorLink] = useState(false);
+  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [calibratingSurfaceId, setCalibratingSurfaceId] = useState('');
+  const [showGrid, setShowGrid] = useState(false);
   const realtimeRef = useRef<ProjectRealtimeClient | null>(null);
   const saveTimerRef = useRef(0);
   const historyRef = useRef<ProjectState[]>([]);
@@ -118,11 +140,10 @@ export function EditorPage({ projectId }: { projectId: string }) {
     setProject(state);
     realtimeRef.current?.sendProject(state);
     window.clearTimeout(saveTimerRef.current);
-    setSaveStatus('Saving...');
+    setIsDirty(true);
     saveTimerRef.current = window.setTimeout(() => {
       saveProject(state).then(() => {
-        setSaveStatus('Saved');
-        window.setTimeout(() => setSaveStatus(''), 1200);
+        setIsDirty(false);
       });
     }, 450);
   };
@@ -135,11 +156,10 @@ export function EditorPage({ projectId }: { projectId: string }) {
       const next = { ...updater(current), updatedAt: new Date().toISOString() };
       realtimeRef.current?.sendProject(next);
       window.clearTimeout(saveTimerRef.current);
-      setSaveStatus('Saving...');
+      setIsDirty(true);
       saveTimerRef.current = window.setTimeout(() => {
         saveProject(next).then(() => {
-          setSaveStatus('Saved');
-          window.setTimeout(() => setSaveStatus(''), 1200);
+          setIsDirty(false);
         });
       }, 450);
       return next;
@@ -176,6 +196,29 @@ export function EditorPage({ projectId }: { projectId: string }) {
       ...current,
       media: current.media.map((item) => item.id === mediaId ? { ...item, ...patch } : item)
     }));
+  };
+
+  const setSurfaceCalibration = (surfaceId: string, calibration: SurfaceCalibration) => {
+    patchSurface(surfaceId, { calibration: normalizeCalibration(calibration) });
+  };
+
+  const flashReferenceStar = (surfaceId: string, starName: string) => {
+    // 3-second amber flash; skyScene auto-stops at `until`, no clear-timer needed.
+    patchSurface(surfaceId, { flashTarget: { name: starName, until: Date.now() + 3000 } });
+  };
+
+  const alignSeam = (surfaceId: string) => {
+    const current = projectRef.current;
+    if (!current) return;
+    const surfaceB = current.surfaces.find((surface) => surface.id === surfaceId);
+    if (!surfaceB || surfaceB.contentType !== 'live') return;
+    const surfaceA = current.surfaces.find(
+      (surface) => surface.id !== surfaceId && surface.contentType === 'live' && surface.liveLayerId === surfaceB.liveLayerId
+    );
+    if (!surfaceA) return;
+    const a = normalizeCalibration(surfaceA.calibration);
+    const b = normalizeCalibration(surfaceB.calibration);
+    setSurfaceCalibration(surfaceId, { ...b, wallBearingDeg: seamAlignedBearing(a.wallBearingDeg, a.fovDeg) });
   };
 
   const addSurface = () => {
@@ -330,53 +373,97 @@ export function EditorPage({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  if (!project) return <div className="flex min-h-screen items-center justify-center bg-[#0b0d12] text-slate-100">Loading project...</div>;
+  if (!project) return <div className="flex min-h-screen items-center justify-center bg-[#080807] text-[#c8b89a]">Loading project...</div>;
+
+  const calibratingSurface = calibratingSurfaceId
+    ? project.surfaces.find((surface) => surface.id === calibratingSurfaceId && surface.contentType === 'live') ?? null
+    : null;
 
   return (
-    <main className="flex h-screen flex-col bg-[#0b0d12] text-slate-100">
-      <header className="flex h-14 items-center justify-between border-b border-white/10 bg-[#121620] px-4">
-        <div className="flex items-center gap-3">
-          <button className="flex h-9 w-9 items-center justify-center rounded border border-white/10 bg-white/[0.04] hover:bg-white/[0.08]" onClick={() => go('/dashboard')} title="Dashboard"><Home size={17} /></button>
+    <main className="flex h-screen min-w-[980px] flex-col bg-[#080807] text-[#c8b89a]">
+      <header className="grid h-[42px] grid-cols-[minmax(240px,1fr)_auto_minmax(360px,1fr)] items-center border-b border-[#111009] bg-[#0c0c0a] px-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <button className="md-button h-8 w-8" onClick={() => go('/dashboard')} title="Dashboard" type="button"><Home size={15} /></button>
           <div>
-            <h1 className="text-lg font-bold">{project.name}</h1>
-            <p className="mono text-[10px] uppercase tracking-wider text-slate-500">Editor / {APP_VERSION_LABEL}</p>
+            <h1 className="truncate text-sm font-semibold leading-4 text-[#c8b89a]">{project.name}</h1>
+            <p className="mono text-[9px] uppercase tracking-[0.12em] text-[#7a6a4a]">EDITOR · {APP_VERSION_LABEL}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {saveStatus && <span className="mono text-xs uppercase text-cyan-200"><Save size={13} className="mr-1 inline" />{saveStatus}</span>}
+        <div className="flex items-center gap-1">
+          <button className="md-button h-8 w-8" onClick={undoProject} disabled={historyRef.current.length === 0} title="Undo" type="button"><Undo2 size={14} /></button>
+          <button className="md-button h-8 w-8" onClick={redoProject} disabled={redoRef.current.length === 0} title="Redo" type="button"><Redo2 size={14} /></button>
+          <div className="mx-1 h-4 w-px bg-[#111009]" />
+          <button className="md-button h-8 w-8" title="Zoom out" type="button"><ZoomOut size={14} /></button>
+          <span className="mono flex h-8 min-w-12 items-center justify-center text-[10px] text-[#7a6a4a]">100%</span>
+          <button className="md-button h-8 w-8" title="Zoom in" type="button"><ZoomIn size={14} /></button>
+          <div className="mx-1 h-4 w-px bg-[#111009]" />
+          <button className={`md-button h-8 w-8 ${showGrid ? 'border-[#e8a020] text-[#e8a020]' : 'border-[#e8a02055] text-[#e8a020]'}`} title="Toggle alignment grid" type="button" onClick={() => setShowGrid((value) => !value)}><Grid3x3 size={14} /></button>
+          <button className="md-button h-8 w-8" title="Snap to grid" type="button" onClick={() => selectedSurfaceId && snapSurface(selectedSurfaceId)}><Magnet size={14} /></button>
+          <div className="mx-1 h-4 w-px bg-[#111009]" />
+          <div className="md-button h-8 gap-2 px-2" title={isDirty ? 'Unsaved changes' : 'Saved'}>
+            <span className={`h-2 w-2 rounded-full ${isDirty ? 'md-save-pulse bg-[#e8a020]' : 'bg-[#2a2820]'}`} />
+            <span className="mono text-[10px] uppercase tracking-[0.12em]">{isDirty ? 'Unsaved' : 'Saved'}</span>
+          </div>
+        </div>
+        <div className="flex min-w-0 items-center justify-end gap-2">
           <ProjectorStatus status={syncStatus} projectorCount={projectorCount} />
-          <button className="inline-flex h-9 items-center gap-2 rounded border border-white/15 bg-white/[0.04] px-3 text-sm hover:border-cyan-300/50" onClick={copyProjectorLink}>
-            {copiedProjectorLink ? <Check size={15} /> : <Copy size={15} />} {copiedProjectorLink ? 'Copied' : 'Copy Projector Link'}
+          <button className="md-button h-8 gap-2 px-3 text-xs" onClick={copyProjectorLink} type="button">
+            {copiedProjectorLink ? <Check size={14} /> : <Copy size={14} />} {copiedProjectorLink ? 'Copied' : 'Copy link'}
           </button>
-          <a className="inline-flex h-9 items-center gap-2 rounded border border-white/15 bg-white/[0.04] px-3 text-sm hover:border-cyan-300/50" href={projectorUrl} target="_blank" rel="noreferrer">
-            <ExternalLink size={15} /> Projector
+          <a className="md-button md-button-amber h-8 gap-2 px-3 text-xs font-semibold" href={projectorUrl} target="_blank" rel="noreferrer">
+            <ExternalLink size={14} /> Projector
           </a>
         </div>
       </header>
-      <div className="grid min-h-0 flex-1 grid-cols-[300px,1fr,300px] gap-4 p-4 max-lg:grid-cols-1 max-lg:overflow-auto">
-        <div className="space-y-4 shrink-0">
-          <MediaPanel media={project.media} notice={mediaNotice} onUpload={handleUpload} onAddSample={handleAddSample} />
-          <FirstRunChecklist project={project} projectorCount={projectorCount} />
-        </div>
-        <EditorCanvas project={project} selectedSurfaceId={selectedSurfaceId} onSelectSurface={setSelectedSurfaceId} onMoveCorner={moveCorner} onMoveSurface={moveSurface} />
-        <SurfaceControls
-          surfaces={project.surfaces}
-          media={project.media}
-          selectedSurfaceId={selectedSurfaceId}
-          onSelectSurface={setSelectedSurfaceId}
-          onAddSurface={addSurface}
-          onDeleteSurface={deleteSurface}
-          onPatchSurface={patchSurface}
-          onPatchMedia={patchMedia}
-          onCenterSurface={centerSurface}
-          onFitSurface={fitSurface}
-          onResetSurface={resetSurface}
-          onDuplicateSurface={duplicateSelectedSurface}
-          onBringForward={bringSurfaceForward}
-          onSendBackward={sendSurfaceBackward}
-          onSnapToGrid={snapSurface}
-        />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="flex w-9 shrink-0 flex-col items-center gap-1 border-r border-[#111009] bg-[#0a0908] py-2">
+          <button className="md-rail-button md-rail-button-active" title="Select" type="button"><MousePointer2 size={15} /></button>
+          <button className="md-rail-button" title="Pan" type="button"><Move size={15} /></button>
+          <div className="my-1 h-px w-[18px] bg-[#161410]" />
+          <button className={`md-rail-button ${leftPanelOpen ? 'md-rail-button-active' : ''}`} onClick={() => setLeftPanelOpen((open) => !open)} title="Media" type="button"><ImageIcon size={15} /></button>
+          <button className={`md-rail-button ${rightPanelOpen ? 'md-rail-button-active' : ''}`} onClick={() => setRightPanelOpen((open) => !open)} title="Surfaces" type="button"><Layers size={15} /></button>
+          <div className="my-1 h-px w-[18px] bg-[#161410]" />
+          <button className="md-rail-button" title="Settings" type="button"><Settings size={15} /></button>
+        </aside>
+        {leftPanelOpen && (
+          <aside className="w-[188px] shrink-0 overflow-y-auto border-r border-[#111009] bg-[#0a0908]">
+            <MediaPanel media={project.media} notice={mediaNotice} onUpload={handleUpload} onAddSample={handleAddSample} />
+            <FirstRunChecklist project={project} projectorCount={projectorCount} />
+          </aside>
+        )}
+        <EditorCanvas project={project} selectedSurfaceId={selectedSurfaceId} onSelectSurface={setSelectedSurfaceId} onMoveCorner={moveCorner} onMoveSurface={moveSurface} showGrid={showGrid} />
+        {rightPanelOpen && (
+          <aside className="w-[188px] shrink-0 overflow-y-auto border-l border-[#111009] bg-[#0a0908]">
+            <SurfaceControls
+              surfaces={project.surfaces}
+              media={project.media}
+              selectedSurfaceId={selectedSurfaceId}
+              onSelectSurface={setSelectedSurfaceId}
+              onAddSurface={addSurface}
+              onDeleteSurface={deleteSurface}
+              onPatchSurface={patchSurface}
+              onPatchMedia={patchMedia}
+              onCenterSurface={centerSurface}
+              onFitSurface={fitSurface}
+              onResetSurface={resetSurface}
+              onDuplicateSurface={duplicateSelectedSurface}
+              onBringForward={bringSurfaceForward}
+              onSendBackward={sendSurfaceBackward}
+              onSnapToGrid={snapSurface}
+              onOpenCalibration={setCalibratingSurfaceId}
+              onAlignSeam={alignSeam}
+            />
+          </aside>
+        )}
       </div>
+      {calibratingSurface && (
+        <CalibrationPanel
+          surface={calibratingSurface}
+          onChangeCalibration={(calibration) => setSurfaceCalibration(calibratingSurface.id, calibration)}
+          onFlash={(starName) => flashReferenceStar(calibratingSurface.id, starName)}
+          onClose={() => setCalibratingSurfaceId('')}
+        />
+      )}
     </main>
   );
 }

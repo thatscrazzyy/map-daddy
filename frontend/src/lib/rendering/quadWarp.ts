@@ -34,13 +34,42 @@ function drawTriangle(ctx: CanvasRenderingContext2D, image: Drawable, source: Po
   ctx.restore();
 }
 
-export function drawImageToQuad(ctx: CanvasRenderingContext2D, image: Drawable, sourceRect: SourceRect, destinationQuad: [Point, Point, Point, Point]) {
+/**
+ * Fade the alpha of a canvas towards its four edges. `fraction` is the feather
+ * width as a share of each dimension (0 = none). Used to soft-blend abutting
+ * surfaces at a projection seam — give the two surfaces a small overlap and
+ * feather their touching edges so the overlap cross-fades instead of showing a
+ * hard line. Uses destination-out so only the edges are affected.
+ */
+function applyEdgeFeather(ctx: CanvasRenderingContext2D, width: number, height: number, fraction: number) {
+  const fx = Math.max(1, Math.round(width * fraction));
+  const fy = Math.max(1, Math.round(height * fraction));
+  const edges: Array<[number, number, number, number, number, number, number, number]> = [
+    [0, 0, fx, 0, 0, 0, fx, height], // left
+    [width, 0, width - fx, 0, width - fx, 0, fx, height], // right
+    [0, 0, 0, fy, 0, 0, width, fy], // top
+    [0, height, 0, height - fy, 0, height - fy, width, fy] // bottom
+  ];
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  for (const [gx0, gy0, gx1, gy1, rx, ry, rw, rh] of edges) {
+    const gradient = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+    gradient.addColorStop(0, 'rgba(0,0,0,1)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(rx, ry, rw, rh);
+  }
+  ctx.restore();
+}
+
+export function drawImageToQuad(ctx: CanvasRenderingContext2D, image: Drawable, sourceRect: SourceRect, destinationQuad: [Point, Point, Point, Point], edgeFeather = 0) {
   const sourceCanvas = document.createElement('canvas');
   sourceCanvas.width = Math.max(1, Math.round(sourceRect.width));
   sourceCanvas.height = Math.max(1, Math.round(sourceRect.height));
   const sourceCtx = sourceCanvas.getContext('2d');
   if (!sourceCtx) return;
   sourceCtx.drawImage(image, sourceRect.x, sourceRect.y, sourceRect.width, sourceRect.height, 0, 0, sourceCanvas.width, sourceCanvas.height);
+  if (edgeFeather > 0) applyEdgeFeather(sourceCtx, sourceCanvas.width, sourceCanvas.height, Math.min(0.49, edgeFeather));
 
   const sourceQuad: [Point, Point, Point, Point] = [
     { x: 0, y: 0 },

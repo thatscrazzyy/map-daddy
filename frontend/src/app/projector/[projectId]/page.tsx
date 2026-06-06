@@ -22,6 +22,7 @@ export function ProjectorPage({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState('connecting');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cursorHidden, setCursorHidden] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const receivedRealtimeRef = useRef(false);
 
@@ -59,6 +60,14 @@ export function ProjectorPage({ projectId }: { projectId: string }) {
   }, []);
 
   useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'g' || event.key === 'G') setShowGrid((value) => !value);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
     let timer = 0;
     const showCursor = () => {
       setCursorHidden(false);
@@ -77,10 +86,18 @@ export function ProjectorPage({ projectId }: { projectId: string }) {
 
   return (
     <main ref={shellRef} className={`relative flex h-screen w-screen items-center justify-center overflow-hidden bg-black ${cursorHidden ? 'cursor-none' : ''}`}>
-      <ProjectorRenderer project={project} />
+      <ProjectorRenderer project={project} showGrid={showGrid} />
       {!isFullscreen && (
         <div className="absolute left-4 top-4 flex items-center gap-3 rounded border border-white/10 bg-black/60 p-3 backdrop-blur">
           <FullscreenButton target={shellRef} isFullscreen={isFullscreen} onChange={() => setIsFullscreen(!!document.fullscreenElement)} />
+          <button
+            className={`mono rounded border px-2 py-1 text-xs uppercase tracking-wider ${showGrid ? 'border-[#e8a020] text-[#e8a020]' : 'border-white/10 text-slate-300'}`}
+            onClick={() => setShowGrid((value) => !value)}
+            type="button"
+            title="Toggle alignment grid (G)"
+          >
+            Grid
+          </button>
           <span className="mono text-xs uppercase tracking-wider text-slate-300">{status === 'synced' || status === 'connected' ? 'Synced' : 'Local'}</span>
         </div>
       )}

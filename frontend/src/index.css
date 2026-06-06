@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,600;0,700;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,22 +6,24 @@
 
 :root {
   color-scheme: dark;
-  --md-bg: #0a0b10;
-  --md-surface: #121318;
-  --md-panel: rgba(22, 25, 34, 0.86);
-  --md-panel-strong: rgba(30, 31, 37, 0.92);
-  --md-border: rgba(255, 255, 255, 0.1);
-  --md-muted: #9aa9aa;
-  --md-text: #e3e1e9;
-  --md-cyan: #00f0ff;
-  --md-cyan-soft: #7df4ff;
-  --md-magenta: #ff24e4;
-  --md-lime: #a9f900;
+  --md-bg: #080807;
+  --md-topbar: #0c0c0a;
+  --md-canvas: #030303;
+  --md-panel: #0a0908;
+  --md-control: #0e0d0a;
+  --md-border-subtle: #111009;
+  --md-border: #1e1c14;
+  --md-text: #c8b89a;
+  --md-muted: #7a6a4a;
+  --md-dim: #2a2820;
+  --md-amber: #e8a020;
+  --md-active-fill: #e8a02008;
+  --md-active-border: #e8a02055;
 }
 
 body {
   margin: 0;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--md-bg);
@@ -44,20 +46,20 @@ button {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
+  background: #0a0908;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(132, 148, 149, 0.35);
-  border-radius: 4px;
+  background: #1e1c14;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 219, 233, 0.55);
+  background: #2a2820;
 }
 
 .mono {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .glass-panel {
@@ -73,43 +75,134 @@ button {
 }
 
 .neon-cyan {
-  color: var(--md-cyan-soft);
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
+  color: var(--md-amber);
+  text-shadow: 0 0 10px rgba(232, 160, 32, 0.28);
 }
 
 .neon-border {
-  box-shadow: 0 0 12px rgba(0, 219, 233, 0.24);
+  box-shadow: 0 0 12px rgba(232, 160, 32, 0.16);
 }
 
 .live-dot {
-  box-shadow: 0 0 0 0 rgba(169, 249, 0, 0.7);
+  box-shadow: 0 0 0 0 rgba(232, 160, 32, 0.55);
   animation: pulse-live 2s infinite;
 }
 
 @keyframes pulse-live {
-  0% { box-shadow: 0 0 0 0 rgba(169, 249, 0, 0.7); }
-  70% { box-shadow: 0 0 0 6px rgba(169, 249, 0, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(169, 249, 0, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(232, 160, 32, 0.55); }
+  70% { box-shadow: 0 0 0 6px rgba(232, 160, 32, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(232, 160, 32, 0); }
 }
 
 .grid-bg {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
-  background-size: 40px 40px;
+    radial-gradient(circle at center, rgba(232, 160, 32, 0.12) 1px, transparent 1px),
+    linear-gradient(to right, rgba(232, 160, 32, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 160, 32, 0.035) 1px, transparent 1px);
+  background-position: 0 0, 0 0, 0 0;
+  background-size: 24px 24px, 120px 120px, 120px 120px;
 }
 
-.range-cyan {
-  accent-color: var(--md-cyan);
+.md-section-label {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--md-dim);
+}
+
+.md-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border: 1px solid var(--md-border);
+  background: var(--md-control);
+  color: var(--md-text);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.md-button:hover:not(:disabled) {
+  background: #0b0a08;
+  border-color: #2a2820;
+}
+
+.md-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.md-button-amber {
+  border-color: var(--md-amber);
+  background: var(--md-amber);
+  color: #080807;
+}
+
+.md-input {
+  height: 30px;
+  width: 100%;
+  border-radius: 3px;
+  border: 1px solid var(--md-border);
+  background: var(--md-control);
+  padding: 0 8px;
+  color: var(--md-text);
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+}
+
+.md-input:focus {
+  border-color: var(--md-active-border);
+}
+
+.md-rail-button {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  color: var(--md-muted);
+}
+
+.md-rail-button:hover,
+.md-rail-button-active {
+  border-color: var(--md-amber);
+  background: #0e0d0a;
+  color: var(--md-amber);
+}
+
+.md-save-pulse {
+  box-shadow: 0 0 0 0 rgba(232, 160, 32, 0.65);
+  animation: md-save-pulse 1.4s infinite;
+}
+
+@keyframes md-save-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(232, 160, 32, 0.65); }
+  70% { box-shadow: 0 0 0 7px rgba(232, 160, 32, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(232, 160, 32, 0); }
+}
+
+.canvas-vignette {
+  background:
+    radial-gradient(circle at center, transparent 0 58%, rgba(0, 0, 0, 0.48) 100%),
+    linear-gradient(180deg, rgba(232, 160, 32, 0.035), transparent 22%, transparent 78%, rgba(232, 160, 32, 0.025));
+}
+
+.range-cyan,
+.range-amber {
+  accent-color: var(--md-amber);
 }
 
 .neon-thumb {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 75% 30%, rgba(255, 36, 228, 0.34), transparent 28%),
-    radial-gradient(circle at 35% 55%, rgba(0, 240, 255, 0.34), transparent 30%),
-    linear-gradient(135deg, #05070c, #111722 55%, #05070c);
+    radial-gradient(circle at 70% 34%, rgba(232, 160, 32, 0.26), transparent 25%),
+    linear-gradient(135deg, #030303, #111009 58%, #030303);
 }
 
 .neon-thumb::before {
@@ -117,15 +210,15 @@ button {
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(170deg, transparent 0 12px, rgba(0, 240, 255, 0.23) 13px, transparent 16px),
-    repeating-linear-gradient(20deg, transparent 0 18px, rgba(255, 36, 228, 0.2) 19px, transparent 22px);
+    repeating-linear-gradient(170deg, transparent 0 12px, rgba(232, 160, 32, 0.16) 13px, transparent 16px),
+    repeating-linear-gradient(20deg, transparent 0 18px, rgba(200, 184, 154, 0.08) 19px, transparent 22px);
   mask-image: radial-gradient(ellipse at center, #000 0 60%, transparent 78%);
 }
 
 .wire-thumb {
   position: relative;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 45%, rgba(0, 240, 255, 0.35), transparent 18%), #05070c;
+  background: radial-gradient(circle at 50% 45%, rgba(232, 160, 32, 0.24), transparent 18%), #030303;
 }
 
 .wire-thumb::before {
@@ -133,11 +226,12 @@ button {
   position: absolute;
   inset: -30%;
   background:
-    linear-gradient(90deg, rgba(0, 240, 255, 0.18) 1px, transparent 1px),
-    linear-gradient(rgba(255, 36, 228, 0.16) 1px, transparent 1px);
-  background-size: 22px 22px;
+    linear-gradient(90deg, rgba(232, 160, 32, 0.14) 1px, transparent 1px),
+    linear-gradient(rgba(122, 106, 74, 0.12) 1px, transparent 1px);
+  background-size: 40px 40px;
   transform: perspective(180px) rotateX(58deg) rotateZ(-8deg);
 }
+
 
 @keyframes slide-in-toast {
   from {
