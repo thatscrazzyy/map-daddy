@@ -19,6 +19,7 @@ import {
 } from '../../../lib/projects/surfaceOperations';
 import type { MappingSurface, ProjectMedia, ProjectState } from '../../../lib/projects/types';
 import { ProjectRealtimeClient } from '../../../lib/realtime/realtimeClient';
+import { appPath } from '../../../lib/routing';
 import { APP_VERSION_LABEL } from '../../../lib/version';
 
 function mediaDimensions(file: File): Promise<{ width: number; height: number }> {
@@ -104,7 +105,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
     };
   }, [projectId]);
 
-  const projectorPath = useMemo(() => `/projector/${projectId}`, [projectId]);
+  const projectorPath = useMemo(() => appPath(`/projector/${projectId}`), [projectId]);
   const projectorUrl = useMemo(() => `${window.location.origin}${projectorPath}`, [projectorPath]);
 
   const copyProjectorLink = async () => {
@@ -281,7 +282,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
   };
 
   const go = (path: string) => {
-    window.history.pushState({}, '', path);
+    window.history.pushState({}, '', appPath(path));
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 

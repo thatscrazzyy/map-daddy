@@ -110,6 +110,14 @@ http://localhost:5173/dashboard
 
 Create a project, click **Sample** or upload an image, adjust the surface, then open the projector link in another tab or projector-connected browser window.
 
+GitHub Pages project deployments live under the repository path:
+
+```text
+https://thatscrazzyy.github.io/map-daddy/
+```
+
+Use `/map-daddy/editor/:projectId` and `/map-daddy/projector/:projectId` on GitHub Pages. The app generates those links automatically when it is built by the Pages workflow.
+
 Optional backend and relay services are still available for hosted or multi-device work:
 
 ```powershell

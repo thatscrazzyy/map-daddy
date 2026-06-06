@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, FolderOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { createProject, deleteProject, listProjects, renameProject } from '../../lib/projects/projectRepository';
 import type { ProjectSummary } from '../../lib/projects/types';
+import { appPath } from '../../lib/routing';
 import { APP_VERSION_LABEL } from '../../lib/version';
 
 export function DashboardPage() {
@@ -16,7 +17,7 @@ export function DashboardPage() {
   }, []);
 
   const open = (path: string) => {
-    window.history.pushState({}, '', path);
+    window.history.pushState({}, '', appPath(path));
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 

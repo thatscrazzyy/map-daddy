@@ -39,6 +39,8 @@ jobs:
           VITE_MAP_DADDY_API_URL: ${{ vars.VITE_MAP_DADDY_API_URL }}
           VITE_MAP_DADDY_RELAY_URL: ${{ vars.VITE_MAP_DADDY_RELAY_URL }}
           VITE_MAP_DADDY_PUBLIC_BACKEND_URL: ${{ vars.VITE_MAP_DADDY_PUBLIC_BACKEND_URL }}
+      - name: Add SPA fallback
+        run: cp frontend/dist/index.html frontend/dist/404.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
